@@ -1,4 +1,3 @@
-// App.js
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
@@ -11,11 +10,10 @@ import {
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { io } from 'socket.io-client';
-import { APP_NAME, SOCKET_URL } from './src/config';
-import MessageBubble from './src/components/MessageBubble';
-import MessageInput from './src/components/MessageInput';
+import { APP_NAME, SOCKET_URL } from './config';
+import MessageBubble from './components/MessageBubble';
+import MessageInput from './components/MessageInput';
 
-// ID do usuário mobile (sempre será 'mobile')
 const USER_ID = 'mobile';
 
 export default function App() {
@@ -26,7 +24,6 @@ export default function App() {
 
   useEffect(() => {
     connectSocket();
-
     return () => {
       if (socketRef.current) {
         socketRef.current.disconnect();
@@ -38,7 +35,7 @@ export default function App() {
     console.log('🔌 Conectando ao servidor:', SOCKET_URL);
 
     socketRef.current = io(SOCKET_URL, {
-      transports: ['websocket'],
+      transports: ['websocket', 'polling'],
       reconnection: true,
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,
@@ -47,9 +44,6 @@ export default function App() {
     socketRef.current.on('connect', () => {
       console.log('✅ Socket conectado!');
       setConnected(true);
-      
-      // Entrar na sala do chat
-      socketRef.current.emit('join_chat', 'main_chat');
     });
 
     socketRef.current.on('disconnect', () => {
@@ -57,24 +51,34 @@ export default function App() {
       setConnected(false);
     });
 
-    socketRef. current.on('connect_error', (error) => {
-      console.error('🔴 Erro de conexão:', error. message);
+    socketRef.current.on('connect_error', (error) => {
+      console.error('🔴 Erro de conexão:', error.message);
       setConnected(false);
     });
 
-    // Ouvir mensagens do web
-    socketRef.current.on('new_message', (message) => {
+    socketRef.current.on('message', (message) => {
       console.log('📩 Mensagem recebida:', message);
-      setMessages((prev) => [...prev, message]);
+      
+      // ✅ Evitar duplicatas: só adiciona se NÃO for do próprio usuário
+      // ou se não existir no array
+      setMessages((prev) => {
+        const exists = prev.some(msg => msg.id === message.id);
+        if (exists) {
+          console.log('⚠️ Mensagem duplicada ignorada:', message.id);
+          return prev;
+        }
+        return [...prev, message];
+      });
+      
       scrollToBottom();
     });
   }
 
   function handleSendMessage(text) {
-    if (! text.trim()) return;
+    if (!text.trim()) return;
 
     const newMessage = {
-      id: Date.now(),
+      id: Date.now(), // Timestamp único
       text: text.trim(),
       senderId: USER_ID,
       senderName: 'Mobile',
@@ -84,16 +88,16 @@ export default function App() {
       }),
     };
 
-    // Adicionar na tela imediatamente
+    // ✅ Adicionar mensagem localmente
     setMessages((prev) => [...prev, newMessage]);
     scrollToBottom();
 
-    // Enviar para o web via socket
+    // ✅ Enviar para o servidor
     if (socketRef.current && connected) {
-      socketRef. current.emit('send_message', newMessage);
+      socketRef.current.emit('message', newMessage);
       console.log('📤 Mensagem enviada:', newMessage);
     } else {
-      console.warn('⚠️ Socket não conectado, mensagem não foi enviada');
+      console.warn('⚠️ Socket não conectado');
     }
   }
 
@@ -104,10 +108,9 @@ export default function App() {
   }
 
   return (
-    <SafeAreaView style={styles. container}>
+    <SafeAreaView style={styles.container}>
       <StatusBar style="light" />
       
-      {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>{APP_NAME}</Text>
         <View style={[styles.statusIndicator, connected && styles.statusConnected]} />
@@ -116,16 +119,15 @@ export default function App() {
         </Text>
       </View>
 
-      {/* Área de mensagens */}
       <KeyboardAvoidingView
         style={styles.chatContainer}
-        behavior={Platform. OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ?  90 : 0}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
         <FlatList
           ref={flatListRef}
           data={messages}
-          keyExtractor={(item) => item. id.toString()}
+          keyExtractor={(item) => item.id.toString()} // ✅ Chave única
           renderItem={({ item }) => (
             <MessageBubble 
               message={item} 

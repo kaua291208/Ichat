@@ -1,4 +1,3 @@
-// src/components/MessageInput.js
 import React, { useState } from 'react';
 import {
   View,
@@ -13,7 +12,7 @@ export default function MessageInput({ onSend }) {
   const [text, setText] = useState('');
 
   function handleSend() {
-    if (text. trim()) {
+    if (text.trim()) { // ✅ CORRIGIDO
       onSend(text);
       setText('');
     }
@@ -32,15 +31,15 @@ export default function MessageInput({ onSend }) {
       />
 
       <TouchableOpacity
-        style={[styles.sendButton, ! text.trim() && styles.sendButtonDisabled]}
+        style={[styles.sendButton, !text.trim() && styles.sendButtonDisabled]} // ✅ CORRIGIDO
         onPress={handleSend}
-        disabled={!text.trim()}
+        disabled={!text.trim()} // ✅ CORRIGIDO
         activeOpacity={0.7}
       >
         <Ionicons
           name="send"
           size={22}
-          color={text.trim() ? '#007AFF' : '#ccc'}
+          color={text.trim() ? '#007AFF' : '#ccc'} // ✅ CORRIGIDO
         />
       </TouchableOpacity>
     </View>
@@ -62,7 +61,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f5f5f5',
     borderRadius: 20,
     paddingHorizontal: 15,
-    paddingVertical: Platform.OS === 'ios' ?  10 : 8,
+    paddingVertical: Platform.OS === 'ios' ? 10 : 8,
     fontSize: 16,
     maxHeight: 100,
     marginRight: 10,

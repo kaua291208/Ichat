@@ -1,16 +1,15 @@
-// src/components/MessageBubble.js
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 
 export default function MessageBubble({ message, isOwn }) {
   return (
-    <View style={[styles.container, isOwn ?  styles. ownContainer : styles.otherContainer]}>
-      {! isOwn && (
+    <View style={[styles.container, isOwn ? styles.ownContainer : styles.otherContainer]}>
+      {!isOwn && (
         <Text style={styles.senderName}>{message.senderName || 'Web'}</Text>
       )}
       
-      <View style={[styles.bubble, isOwn ? styles. ownBubble : styles.otherBubble]}>
-        <Text style={[styles.text, isOwn ? styles. ownText : styles.otherText]}>
+      <View style={[styles.bubble, isOwn ? styles.ownBubble : styles.otherBubble]}>
+        <Text style={[styles.text, isOwn ? styles.ownText : styles.otherText]}>
           {message.text}
         </Text>
         <Text style={[styles.time, isOwn ? styles.ownTime : styles.otherTime]}>
@@ -24,37 +23,34 @@ export default function MessageBubble({ message, isOwn }) {
 const styles = StyleSheet.create({
   container: {
     marginVertical: 5,
-    maxWidth: '75%',
+    maxWidth: '80%',
   },
   ownContainer: {
     alignSelf: 'flex-end',
+    alignItems: 'flex-end',
   },
   otherContainer: {
     alignSelf: 'flex-start',
+    alignItems: 'flex-start',
   },
   senderName: {
     fontSize: 12,
     color: '#666',
     marginBottom: 4,
-    marginLeft: 12,
-    fontWeight: '500',
+    marginLeft: 10,
   },
   bubble: {
-    borderRadius: 18,
-    paddingHorizontal: 14,
+    paddingHorizontal: 15,
     paddingVertical: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    borderRadius: 18,
+    maxWidth: '100%',
   },
   ownBubble: {
     backgroundColor: '#007AFF',
     borderBottomRightRadius: 4,
   },
   otherBubble: {
-    backgroundColor: '#fff',
+    backgroundColor: '#E5E5EA',
     borderBottomLeftRadius: 4,
   },
   text: {
@@ -65,17 +61,18 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   otherText: {
-    color: '#333',
+    color: '#000',
   },
   time: {
     fontSize: 11,
     marginTop: 4,
   },
   ownTime: {
-    color: 'rgba(255,255,255,0.7)',
+    color: 'rgba(255, 255, 255, 0.7)',
     textAlign: 'right',
   },
   otherTime: {
     color: '#999',
+    textAlign: 'left',
   },
 });
