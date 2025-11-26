@@ -1,15 +1,19 @@
-// src/components/MessageBubble. js
+// src/components/MessageBubble.js
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 
 export default function MessageBubble({ message, isOwn }) {
   return (
     <View style={[styles.container, isOwn ?  styles. ownContainer : styles.otherContainer]}>
-      <View style={[styles.bubble, isOwn ?  styles.ownBubble : styles.otherBubble]}>
-        <Text style={[styles.text, isOwn ?  styles.ownText : styles. otherText]}>
+      {! isOwn && (
+        <Text style={styles.senderName}>{message.senderName || 'Web'}</Text>
+      )}
+      
+      <View style={[styles.bubble, isOwn ? styles. ownBubble : styles.otherBubble]}>
+        <Text style={[styles.text, isOwn ? styles. ownText : styles.otherText]}>
           {message.text}
         </Text>
-        <Text style={[styles.time, isOwn ? styles. ownTime : styles.otherTime]}>
+        <Text style={[styles.time, isOwn ? styles.ownTime : styles.otherTime]}>
           {message.time}
         </Text>
       </View>
@@ -28,10 +32,22 @@ const styles = StyleSheet.create({
   otherContainer: {
     alignSelf: 'flex-start',
   },
+  senderName: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 4,
+    marginLeft: 12,
+    fontWeight: '500',
+  },
   bubble: {
     borderRadius: 18,
     paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingVertical: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
   ownBubble: {
     backgroundColor: '#007AFF',

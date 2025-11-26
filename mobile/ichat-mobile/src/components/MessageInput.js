@@ -13,7 +13,7 @@ export default function MessageInput({ onSend }) {
   const [text, setText] = useState('');
 
   function handleSend() {
-    if (text.trim()) {
+    if (text. trim()) {
       onSend(text);
       setText('');
     }
@@ -24,6 +24,7 @@ export default function MessageInput({ onSend }) {
       <TextInput
         style={styles.input}
         placeholder="Digite uma mensagem..."
+        placeholderTextColor="#999"
         value={text}
         onChangeText={setText}
         multiline
@@ -31,9 +32,10 @@ export default function MessageInput({ onSend }) {
       />
 
       <TouchableOpacity
-        style={[styles.sendButton, !text.trim() && styles.sendButtonDisabled]}
+        style={[styles.sendButton, ! text.trim() && styles.sendButtonDisabled]}
         onPress={handleSend}
         disabled={!text.trim()}
+        activeOpacity={0.7}
       >
         <Ionicons
           name="send"
@@ -64,6 +66,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     maxHeight: 100,
     marginRight: 10,
+    color: '#333',
   },
   sendButton: {
     width: 40,
@@ -71,6 +74,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#f5f5f5',
   },
   sendButtonDisabled: {
     opacity: 0.5,
