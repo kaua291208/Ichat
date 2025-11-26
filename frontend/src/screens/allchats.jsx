@@ -7,17 +7,15 @@ import SearchBar from '../components/searchbar';
 import ChatList from '../components/chatlist';
 import Composer from '../components/composer';
 
-const SOCKET_SERVER_URL = "http://localhost:3001"; // ajuste se necessário
-
+const SOCKET_SERVER_URL = "http://10.1.156.80:3000"; // ✅ CORRIGIDO: mesma porta do backend
 
 const MOCK = [
-  { id: '1', title: 'Fulano', lastMessage: 'Oi, tudo bem?', lastAt: Date.now() - 1000 * 60 * 60 },
-  { id: '2', title: 'Projeto', lastMessage: 'Atualizei o PR', lastAt: Date.now() - 1000 * 60 * 40 },
+  { id: '1', title: 'Mobile', lastMessage: '', lastAt: Date.now() },
 ];
 
 export default function AllChats() {
-  const [view, setView] = useState('list'); 
-  const [selected, setSelected] = useState(null);
+  const [view, setView] = useState('chat'); // ✅ Já abre direto no chat
+  const [selected, setSelected] = useState({ id: '1', title: 'Mobile' }); // ✅ Chat fixo com mobile
   const [chats, setChats] = useState(MOCK);
   const [filter, setFilter] = useState('');
   const [composer, setComposer] = useState('');
@@ -25,46 +23,36 @@ export default function AllChats() {
   const [connected, setConnected] = useState(false);
 
   const socketRef = useRef(null);
-  const selectedRef = useRef(selected);
-
-  useEffect(() => { selectedRef.current = selected; }, [selected]);
 
   useEffect(() => {
-    // conecta uma vez
-    socketRef.current = io(SOCKET_SERVER_URL, { transports: ['websocket'] });
+    socketRef.current = io(SOCKET_SERVER_URL, { 
+      transports: ['websocket', 'polling'] 
+    });
 
     socketRef.current.on('connect', () => {
       setConnected(true);
-      console.log('socket connected');
-      // opcional: pedir lista de chats/histórico ao backend
-      // socketRef.current.emit('getChats');
+      console.log('✅ Web socket conectado');
     });
 
     socketRef.current.on('disconnect', () => {
       setConnected(false);
-      console.log('socket disconnected');
+      console.log('❌ Web socket desconectado');
     });
 
-    // recebe mensagens vindas do servidor
     socketRef.current.on('message', (msg) => {
-      if (!msg) return;
-      // atualiza preview de chats
-      setChats(prev => {
-        const exists = prev.find(c => c.id === msg.chatId);
+      console.log('📩 Mensagem recebida no web:', msg);
+      
+      // ✅ Evitar duplicatas
+      setMessages(prev => {
+        const exists = prev.some(m => m.id === msg.id);
         if (exists) {
-          return prev.map(c => c.id === msg.chatId ? { ...c, lastMessage: msg.text, lastAt: msg.at } : c);
+          console.log('⚠️ Mensagem duplicada ignorada:', msg.id);
+          return prev;
         }
-        // cria novo chat se necessário
-        return [{ id: msg.chatId, title: msg.title || 'Contato', lastMessage: msg.text, lastAt: msg.at }, ...prev];
+        return [...prev, msg];
       });
-
-      // se a conversa selecionada for a mesma, adiciona a mensagem à tela
-      if (selectedRef.current && msg.chatId === selectedRef.current.id) {
-        setMessages(prev => [...prev, msg]);
-      }
     });
 
-    // cleanup
     return () => {
       if (!socketRef.current) return;
       socketRef.current.off('connect');
@@ -75,58 +63,85 @@ export default function AllChats() {
     };
   }, []);
 
-  // ao abrir chat, limpa mensagens e (opcional) solicita histórico ao backend
-  const openChat = (chat) => {
-    setSelected(chat);
-    setView('chat');
-    setMessages([]); // remove mensagens de exemplo
-    // solicitar histórico (se o backend fornecer)
-    // socketRef.current?.emit('getHistory', { chatId: chat.id });
-  };
-
   const sendMessage = () => {
-    if (!composer.trim() || !socketRef.current || !selected) return;
-    const payload = { chatId: selected.id, text: composer.trim(), at: Date.now() };
+    if (!composer.trim() || !socketRef.current || !connected) {
+      console.warn('⚠️ Não pode enviar: socket não conectado');
+      return;
+    }
 
-    // optimistic UI: adiciona localmente
-    setMessages(prev => [...prev, { ...payload, id: 'local-' + Date.now(), from: 'me' }]);
-    setChats(prev => prev.map(c => c.id === selected.id ? { ...c, lastMessage: payload.text, lastAt: payload.at } : c));
+    const payload = { 
+      id: Date.now(),
+      text: composer.trim(), 
+      senderId: 'web',
+      senderName: 'Web',
+      time: new Date().toLocaleTimeString('pt-BR', { 
+        hour: '2-digit', 
+        minute: '2-digit' 
+      }),
+    };
+
+    console.log('📤 Enviando mensagem do web:', payload);
+
+    // ✅ Adiciona localmente
+    setMessages(prev => [...prev, payload]);
     setComposer('');
 
-    // envia para o servidor (o servidor deve re-broadcast com evento 'message')
+    // ✅ Envia para o servidor
     socketRef.current.emit('message', payload);
   };
 
-  const filtered = chats.filter(c => c.title.toLowerCase().includes(filter.toLowerCase()) || (c.lastMessage || '').toLowerCase().includes(filter.toLowerCase()));
-
   return (
     <div style={{ maxWidth: 720, margin: '0 auto', border: '1px solid #eee', borderRadius: 6, overflow: 'hidden' }}>
-      <Header title={view === 'list' ? `Chats ${connected ? '•' : ' (offline)'} ` : selected?.title} onBack={view === 'chat' ? () => setView('list') : null} />
-      {view === 'list' ? (
-        <>
-          <SearchBar value={filter} onChange={setFilter} />
-          <ChatList chats={filtered} onSelect={openChat} />
-        </>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', height: '60vh' }}>
-          <div style={{ flex: 1, padding: 12, overflowY: 'auto' }}>
-            {messages.length === 0 ? <div style={{ color: '#666' }}>Sem mensagens</div> :
-              messages.map(m => (
-                <div key={m.id} style={{ marginBottom: 10, display: 'flex', justifyContent: (m.from === 'me') ? 'flex-end' : 'flex-start' }}>
-                  <div style={{
-                    background: (m.from === 'me') ? '#daf1d8' : '#fff',
-                    padding: 8, borderRadius: 8, maxWidth: '70%', boxShadow: '0 0 0 1px #f0f0f0 inset'
+      <Header 
+        title={`Chat - ${connected ? '🟢 Conectado' : '🔴 Desconectado'}`} 
+      />
+      
+      <div style={{ display: 'flex', flexDirection: 'column', height: '80vh' }}>
+        <div style={{ flex: 1, padding: 12, overflowY: 'auto', backgroundColor: '#f5f5f5' }}>
+          {messages.length === 0 ? (
+            <div style={{ color: '#666', textAlign: 'center', marginTop: 100 }}>
+              {connected ? 'Nenhuma mensagem ainda.\nEnvie a primeira!' : 'Conectando ao servidor...'}
+            </div>
+          ) : (
+            messages.map(m => (
+              <div 
+                key={m.id} 
+                style={{ 
+                  marginBottom: 10, 
+                  display: 'flex', 
+                  justifyContent: m.senderId === 'web' ? 'flex-end' : 'flex-start' 
+                }}
+              >
+                <div style={{
+                  background: m.senderId === 'web' ? '#007AFF' : '#E5E5EA',
+                  color: m.senderId === 'web' ? '#fff' : '#000',
+                  padding: 10, 
+                  borderRadius: 18, 
+                  maxWidth: '70%',
+                  borderBottomRightRadius: m.senderId === 'web' ? 4 : 18,
+                  borderBottomLeftRadius: m.senderId === 'web' ? 18 : 4,
+                }}>
+                  {m.senderId !== 'web' && (
+                    <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 4 }}>
+                      {m.senderName || 'Mobile'}
+                    </div>
+                  )}
+                  <div style={{ fontSize: 16 }}>{m.text}</div>
+                  <div style={{ 
+                    fontSize: 11, 
+                    marginTop: 6,
+                    opacity: 0.7,
+                    textAlign: 'right'
                   }}>
-                    <div style={{ fontSize: 14 }}>{m.text}</div>
-                    <div style={{ fontSize: 11, color: '#666', marginTop: 6 }}>{new Date(m.at).toLocaleTimeString()}</div>
+                    {m.time}
                   </div>
                 </div>
-              ))
-            }
-          </div>
-          <Composer value={composer} onChange={setComposer} onSend={sendMessage} />
+              </div>
+            ))
+          )}
         </div>
-      )}
+        <Composer value={composer} onChange={setComposer} onSend={sendMessage} />
+      </div>
     </div>
   );
 }
