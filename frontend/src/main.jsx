@@ -1,9 +1,11 @@
-import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
-import App from './App.jsx'
+import { createRoot } from 'react-dom/client';
+import AllChats from './screens/allchats';
 
-createRoot(document.getElementById('root')).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-)
+const mount = document.getElementById('root') || (() => {
+  const d = document.createElement('div');
+  d.id = 'root';
+  document.body.appendChild(d);
+  return d;
+})();
+
+createRoot(mount).render(<AllChats />);
