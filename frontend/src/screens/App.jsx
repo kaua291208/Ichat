@@ -12,6 +12,38 @@ const App = () => {
   const [mensagem, setMensagem] = useState("");
 
   useEffect(() => {
+
+
+    loadHistory();
+
+    socket.on("connect", () => {
+      console.log("✅ Conectado ao servidor:", socket.id);
+      setConectado(true);
+    });
+
+    socket.on("message", (data) => {
+      console.log("📩 Mensagem recebida:", data);
+      
+      // ✅ EVITAR DUPLICATAS
+      setMensagems((prev) => {
+        const exists = prev.some(msg => msg.id === data.id);
+        if (exists) return prev;
+        return [...prev, data];
+      });
+    });
+
+    async function loadHistory() {
+      try {
+        console.log('📜 Carregando histórico...');
+        const response = await fetch('http://10.1.156.206:3000/api/messages');
+        const history = await response.json();
+        console.log(`✅ ${history.length} mensagens carregadas`);
+        setMensagems(history);
+      } catch (error) {
+        console.error('❌ Erro ao carregar histórico:', error);
+      }
+    }
+
     socket.on("connect", () => {
       console.log("✅ Conectado ao servidor:", socket.id);
       setConectado(true);

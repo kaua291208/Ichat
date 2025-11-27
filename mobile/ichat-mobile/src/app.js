@@ -21,6 +21,7 @@ export default function App() {
   const socketRef = useRef(null);
 
   useEffect(() => {
+    loadHistory();
     connectSocket();
     return () => {
       if (socketRef.current) {
@@ -29,6 +30,18 @@ export default function App() {
     };
   }, []);
 
+  async function loadHistory() {
+    try {
+      console.log('📜 Carregando histórico...');
+      const response = await fetch(`${API_URL}/messages`);
+      const history = await response.json();
+      console.log(`✅ ${history.length} mensagens carregadas`);
+      setMessages(history);
+    } catch (error) {
+      console.error('❌ Erro ao carregar histórico:', error);
+    }
+  }
+  
   function connectSocket() {
     console.log('🔌 Conectando ao servidor:', SOCKET_URL);
 
