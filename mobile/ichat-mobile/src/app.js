@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { io } from 'socket.io-client';
-import { APP_NAME, SOCKET_URL } from './config';
+import { APP_NAME, SOCKET_URL,API_URL } from './config';
 import MessageBubble from './components/MessageBubble';
 import MessageInput from './components/MessageInput';
 
