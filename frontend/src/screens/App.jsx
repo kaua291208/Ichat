@@ -12,7 +12,7 @@ const App = () => {
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
-    const SERVER_URL = process.env.REACT_APP_SERVER_URL || "http://10.1.156.206:3000";
+    const SERVER_URL =  "http://10.1.156.206:3000";
 
 
     socketRef.current = io(SERVER_URL, {
