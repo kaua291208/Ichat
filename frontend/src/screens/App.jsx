@@ -31,14 +31,24 @@ const App = () => {
         return [...prev, data];
       });
     });
-
+    
     async function loadHistory() {
       try {
         console.log('📜 Carregando histórico...');
         const response = await fetch('http://10.1.156.206:3000/api/messages');
         const history = await response.json();
+        const normalized = history.map(msg => ({
+      id: msg.id,
+      text: msg.text,
+      senderId: msg.sender_id,        
+      senderName: msg.sender_name,    
+      time: msg. time || new Date(msg.created_at).toLocaleTimeString('pt-BR', {
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+    }));
         console.log(`✅ ${history.length} mensagens carregadas`);
-        setMensagems(history);
+        setMensagems(normalized);
       } catch (error) {
         console.error('❌ Erro ao carregar histórico:', error);
       }
