@@ -49,10 +49,6 @@ const App = () => {
       setConectado(true);
     });
 
-    socket.on("message", (data) => {
-      console.log("📩 Mensagem recebida:", data);
-      setMensagems((prev) => [...prev, data]);
-    });
 
     socket.on("disconnect", () => {
       console.log("❌ Desconectado");
