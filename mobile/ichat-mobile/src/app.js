@@ -14,8 +14,6 @@ import { APP_NAME, SOCKET_URL } from './config';
 import MessageBubble from './components/MessageBubble';
 import MessageInput from './components/MessageInput';
 
-const USER_ID = 'mobile';
-
 export default function App() {
   const [messages, setMessages] = useState([]);
   const [connected, setConnected] = useState(false);
@@ -42,7 +40,7 @@ export default function App() {
     });
 
     socketRef.current.on('connect', () => {
-      console.log('✅ Socket conectado!');
+      console.log('✅ Socket conectado!', socketRef.current.id);
       setConnected(true);
     });
 
@@ -57,19 +55,29 @@ export default function App() {
     });
 
     socketRef.current.on('message', (message) => {
-      console.log('📩 Mensagem recebida:', message);
-      
-      // ✅ Evitar duplicatas: só adiciona se NÃO for do próprio usuário
-      // ou se não existir no array
+      console.log('📩 Mensagem recebida (raw):', message);
+
+      const normalized = {
+        id:
+          message?.id ??
+          (message?.socketId ? String(message.socketId) : `${Date.now()}-${Math.random()}`),
+        text: message?.text ?? message?.message ?? '',
+        senderId: message?.senderId ?? message?.socketId ?? message?.sender ?? 'unknown',
+        senderName: message?.senderName ?? message?.sender ?? 'Unknown',
+        time:
+          message?.time ??
+          new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+      };
+
       setMessages((prev) => {
-        const exists = prev.some(msg => msg.id === message.id);
+        const exists = prev.some((msg) => String(msg.id) === String(normalized.id));
         if (exists) {
-          console.log('⚠️ Mensagem duplicada ignorada:', message.id);
+          console.log('⚠️ Mensagem duplicada ignorada:', normalized.id);
           return prev;
         }
-        return [...prev, message];
+        return [...prev, normalized];
       });
-      
+
       scrollToBottom();
     });
   }
@@ -78,21 +86,21 @@ export default function App() {
     if (!text.trim()) return;
 
     const newMessage = {
-      id: Date.now(), // Timestamp único
+      id: Date.now(),
       text: text.trim(),
-      senderId: USER_ID,
+      senderId: socketRef.current?.id ?? 'mobile-temp',
       senderName: 'Mobile',
-      time: new Date().toLocaleTimeString('pt-BR', { 
-        hour: '2-digit', 
-        minute: '2-digit' 
+      time: new Date().toLocaleTimeString('pt-BR', {
+        hour: '2-digit',
+        minute: '2-digit',
       }),
     };
 
-    // ✅ Adicionar mensagem localmente
+    // Adicionar mensagem localmente (já normalizada)
     setMessages((prev) => [...prev, newMessage]);
     scrollToBottom();
 
-    // ✅ Enviar para o servidor
+    // Enviar para o servidor
     if (socketRef.current && connected) {
       socketRef.current.emit('message', newMessage);
       console.log('📤 Mensagem enviada:', newMessage);
@@ -110,7 +118,7 @@ export default function App() {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar style="light" />
-      
+
       <View style={styles.header}>
         <Text style={styles.headerTitle}>{APP_NAME}</Text>
         <View style={[styles.statusIndicator, connected && styles.statusConnected]} />
@@ -127,20 +135,20 @@ export default function App() {
         <FlatList
           ref={flatListRef}
           data={messages}
-          keyExtractor={(item) => item.id.toString()} // ✅ Chave única
-          renderItem={({ item }) => (
-            <MessageBubble 
-              message={item} 
-              isOwn={item.senderId === USER_ID} 
-            />
-          )}
+          keyExtractor={(item, index) => {
+            if (item && item.id !== undefined && item.id !== null) return String(item.id);
+            if (item && item.senderId) return String(item.senderId);
+            return String(index);
+          }}
+          renderItem={({ item }) => {
+            const isOwn = String(item.senderId) === String(socketRef.current?.id);
+            return <MessageBubble message={item} isOwn={isOwn} />;
+          }}
           contentContainerStyle={styles.messagesList}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyText}>
-                {connected 
-                  ? 'Nenhuma mensagem ainda.\nEnvie a primeira!' 
-                  : 'Conectando ao servidor...'}
+                {connected ? 'Nenhuma mensagem ainda.\nEnvie a primeira!' : 'Conectando ao servidor...'}
               </Text>
             </View>
           }

@@ -1,5 +1,5 @@
 import { createRoot } from 'react-dom/client';
-import AllChats from './screens/allchats';
+import App from './screens/App';
 
 const mount = document.getElementById('root') || (() => {
   const d = document.createElement('div');
@@ -8,4 +8,4 @@ const mount = document.getElementById('root') || (() => {
   return d;
 })();
 
-createRoot(mount).render(<AllChats />);
+createRoot(mount).render(<App />);
