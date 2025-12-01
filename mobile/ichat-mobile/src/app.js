@@ -7,23 +7,44 @@ import {
   Platform,
   Text,
   SafeAreaView,
+  AppState,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { io } from 'socket.io-client';
-import { APP_NAME, SOCKET_URL,API_URL } from './config';
+import { APP_NAME, SOCKET_URL, API_URL } from './config';
 import MessageBubble from './components/MessageBubble';
 import MessageInput from './components/MessageInput';
+import NotificationBanner from './components/NotificationBanner';
 
 export default function App() {
   const [messages, setMessages] = useState([]);
   const [connected, setConnected] = useState(false);
+  const [notification, setNotification] = useState(null);
   const flatListRef = useRef(null);
   const socketRef = useRef(null);
+  const appState = useRef(AppState.currentState);
+  const [isInForeground, setIsInForeground] = useState(true);
 
   useEffect(() => {
+    const subscription = AppState.addEventListener('change', nextAppState => {
+      console.log('🔄 Estado do app mudou:', appState.current, '→', nextAppState);
+      
+      if (nextAppState === 'active') {
+        console.log('📱 App em PRIMEIRO PLANO');
+        setIsInForeground(true);
+      } else if (nextAppState.match(/inactive|background/)) {
+        console.log('🌙 App em SEGUNDO PLANO');
+        setIsInForeground(false);
+      }
+      
+      appState.current = nextAppState;
+    });
+
     loadHistory();
     connectSocket();
+
     return () => {
+      subscription.remove();
       if (socketRef.current) {
         socketRef.current.disconnect();
       }
@@ -41,7 +62,7 @@ export default function App() {
       console.error('❌ Erro ao carregar histórico:', error);
     }
   }
-  
+
   function connectSocket() {
     console.log('🔌 Conectando ao servidor:', SOCKET_URL);
 
@@ -53,7 +74,7 @@ export default function App() {
     });
 
     socketRef.current.on('connect', () => {
-      console.log('✅ Socket conectado!', socketRef.current.id);
+      console.log('✅ Socket conectado! ID:', socketRef.current.id);
       setConnected(true);
     });
 
@@ -68,19 +89,34 @@ export default function App() {
     });
 
     socketRef.current.on('message', (message) => {
-      console.log('📩 Mensagem recebida (raw):', message);
+      console.log('📩 Mensagem recebida:', message);
 
       const normalized = {
-        id:
-          message?.id ??
-          (message?.socketId ? String(message.socketId) : `${Date.now()}-${Math.random()}`),
-        text: message?.text ?? message?.message ?? '',
-        senderId: message?.senderId ?? message?.socketId ?? message?.sender ?? 'unknown',
-        senderName: message?.senderName ?? message?.sender ?? 'Unknown',
-        time:
-          message?.time ??
-          new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+        id: message?.id ?? `${Date.now()}-${Math.random()}`,
+        text: message?.text ?? '',
+        senderId: message?.senderId ?? message?.sender_id ?? 'unknown',
+        senderName: message?.senderName ?? message?.sender_name ?? 'Unknown',
+        time: message?.time ?? new Date().toLocaleTimeString('pt-BR', {
+          hour: '2-digit',
+          minute: '2-digit',
+        }),
       };
+
+      const isOwnMessage = String(normalized.senderId) === String(socketRef.current?.id);
+      
+      console.log('🔍 Verificando notificação:');
+      console.log('  - Mensagem própria?', isOwnMessage);
+      console.log('  - App em primeiro plano?', isInForeground);
+      console.log('  - Sender ID:', normalized.senderId);
+      console.log('  - My Socket ID:', socketRef.current?.id);
+      
+
+      if (!isOwnMessage) {
+        console.log('🔔 MOSTRANDO NOTIFICAÇÃO!');
+        setNotification(normalized);
+      } else {
+        console.log('⏭️ Ignorando notificação (mensagem própria)');
+      }
 
       setMessages((prev) => {
         const exists = prev.some((msg) => String(msg.id) === String(normalized.id));
@@ -109,14 +145,13 @@ export default function App() {
       }),
     };
 
-    // Adicionar mensagem localmente (já normalizada)
+    console.log('📤 Enviando mensagem:', newMessage);
+
     setMessages((prev) => [...prev, newMessage]);
     scrollToBottom();
 
-    // Enviar para o servidor
     if (socketRef.current && connected) {
       socketRef.current.emit('message', newMessage);
-      console.log('📤 Mensagem enviada:', newMessage);
     } else {
       console.warn('⚠️ Socket não conectado');
     }
@@ -128,15 +163,29 @@ export default function App() {
     }, 100);
   }
 
+  function handleNotificationPress(message) {
+    console.log('👆 Usuário clicou na notificação:', message);
+    setNotification(null);
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar style="light" />
+
+      <NotificationBanner
+        message={notification}
+        onPress={handleNotificationPress}
+        onDismiss={() => setNotification(null)}
+      />
 
       <View style={styles.header}>
         <Text style={styles.headerTitle}>{APP_NAME}</Text>
         <View style={[styles.statusIndicator, connected && styles.statusConnected]} />
         <Text style={styles.statusText}>
           {connected ? 'Conectado' : 'Desconectado'}
+        </Text>
+        <Text style={styles.appStateText}>
+          {isInForeground ? '📱' : '🌙'}
         </Text>
       </View>
 
@@ -205,6 +254,10 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#fff',
     opacity: 0.8,
+    marginRight: 8,
+  },
+  appStateText: {
+    fontSize: 16,
   },
   chatContainer: {
     flex: 1,

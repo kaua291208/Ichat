@@ -12,7 +12,7 @@ const App = () => {
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
-    const SERVER_URL =  "http://10.1.156.206:3000";
+    const SERVER_URL =  "http://10.1.157.46:3000";
 
 
     socketRef.current = io(SERVER_URL, {
@@ -142,7 +142,7 @@ const App = () => {
 
   return (
     <div style={styles.appContainer}>
-      <h1 style={styles.title}>💬 Chat em Tempo Real</h1>
+      <h1 style={styles.title}>💬 Ichat</h1>
 
       <div
         style={{
