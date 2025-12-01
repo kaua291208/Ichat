@@ -1,84 +1,137 @@
-import cors from 'cors';
-import express from 'express';
-import http from 'http';
-import { Server } from 'socket.io';
-import { createClient } from '@supabase/supabase-js';
+const { Server } = require("socket.io");
 
-const SUPABASE_URL = 'https://hiffivxszvipbhjkmjge.supabase.co'; 
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhpZmZpdnhzenZpcGJoamttamdlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQyNTk3MTQsImV4cCI6MjA3OTgzNTcxNH0.ARaOUOBvZhep3WQ5DeDFH7L_WX602Wq4h67I2LJWyWI';
-export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-
-const app = express();
-app.use(cors());
-app.use(express.json());
-
-app.get("/", (req, res) => {
-  res.send("api rodando com supabase");
-});
-
-// ✅ Endpoint para buscar histórico
-app.get("/api/messages", async (req, res) => {
-  try {
-    const { data, error } = await supabase
-      .from('messages')
-      .select('*')
-      .order('created_at', { ascending: true });
-
-    if (error) throw error;
-
-    console.log(`📜 Enviando ${data.length} mensagens`);
-    res.json(data);
-  } catch (error) {
-    console.error('❌ Erro:', error);
-    res.status(500).json({ error: error.message });
+const io = new Server(3000, {
+  cors: {
+    origin: "*"
   }
 });
 
-const server = http.createServer(app);
+// ======= USERS CONECTADOS =======
+const users = new Map();
+// number => { socketId, role }
 
-const io = new Server(server, {
-  cors: { 
-    origin: "*",
-    methods: ["GET", "POST"]
-  },
-  transports: ['websocket', 'polling']
-});
+// ======= CONVERSAS =======
+const conversations = new Map();
+// convId => { id, users:[a,b], messages:[] }
+
+function updateAgents() {
+
+  const agents = [];
+
+  for (const [number, data] of users) {
+    if (data.role === "web") {
+      agents.push({ number });
+    }
+  }
+
+  io.emit("agents:list", agents);
+}
+
+// ====================================
 
 io.on("connection", (socket) => {
-  console.log("✅ Usuario conectado:", socket.id);
-  
-  socket.on("message", async (data) => {
-    console.log("📩 Mensagem recebida:", data);
-    
-    try {
-      // ✅ Salvar no Supabase
-      const { error } = await supabase
-        .from('messages')
-        .insert([{
-          id: data.id,
-          text: data.text,
-          sender_id: data.senderId,
-          sender_name: data.senderName,
-          time: data.time
-        }]);
 
-      if (error) {
-        console.error('❌ Erro ao salvar:', error);
-      } else {
-        console.log('💾 Mensagem salva no Supabase');
-      }
-    } catch (error) {
-      console.error('❌ Erro:', error);
+  console.log("🔌 conectado:", socket.id);
+
+  // ======= LOGIN =======
+  socket.on("login", ({ number, role }) => {
+
+    if (!number) return;
+
+    socket.number = number;
+
+    users.set(number, {
+      socketId: socket.id,
+      role
+    });
+
+    console.log("✅ login:", number, role);
+
+    updateAgents();
+  });
+
+  // ======= CRIAR CONVERSA =======
+  socket.on("conversation:start", ({ with: target }) => {
+
+    const from = socket.number;
+
+    if (!from || !users.has(target)) return;
+
+    const id = "conv-" + Date.now();
+
+    const conv = {
+      id,
+      users: [from, target],
+      messages: []
+    };
+
+    conversations.set(id, conv);
+
+    for (const u of conv.users) {
+      const sId = users.get(u).socketId;
+
+      io.to(sId).emit("conversation:created", {
+        id,
+        with: u === from ? target : from
+      });
     }
-    
-    io.emit("message", data);
+
   });
-  
+
+  // ======= PEDIR HISTORICO =======
+  socket.on("conversation:history", ({ conversation_id }) => {
+
+    const conv = conversations.get(conversation_id);
+
+    socket.emit("conversation:history", conv.messages || []);
+
+  });
+
+  // ======= MANDAR MSG =======
+  socket.on("message:send", ({ conversation_id, text }) => {
+
+    const from = socket.number;
+
+    if (!from || !text) return;
+
+    const conv = conversations.get(conversation_id);
+    if (!conv) return;
+
+    const msg = {
+      id: Date.now(),
+      conversation_id,
+      from,
+      text,
+      date: new Date()
+    };
+
+    conv.messages.push(msg);
+
+    for (const u of conv.users) {
+
+      const sId = users.get(u)?.socketId;
+
+      if (sId) {
+        io.to(sId).emit("message", msg);
+      }
+
+    }
+
+  });
+
+  // ======= DISCONNECT =======
   socket.on("disconnect", () => {
-    console.log("❌ Usuario desconectado:", socket.id);
+
+    if (!socket.number) return;
+
+    console.log("❌ saiu:", socket.number);
+
+    users.delete(socket.number);
+
+    updateAgents();
+
   });
+
 });
 
-server.listen(3000, '0.0.0.0', () => {
-  console.log('🚀 Servidor rodando em http://0.0.0.0:3000');
-});
+console.log("🚀 Server rodando na porta 3000");

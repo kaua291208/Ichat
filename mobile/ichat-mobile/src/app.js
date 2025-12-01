@@ -1,12 +1,30 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from "react";
 import {
   View,
-  FlatList,
-  StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
   Text,
+  TouchableOpacity,
+  StyleSheet,
+  FlatList,
   SafeAreaView,
+<<<<<<< Updated upstream
+=======
+<<<<<<< HEAD
+  TextInput
+} from "react-native";
+
+import { io } from "socket.io-client";
+
+const SERVER_URL = "http://10.1.157.74:3000";
+
+export default function App() {
+
+  // ===== LOGIN =====
+  const [number, setNumber] = useState("");
+  const [logged, setLogged] = useState(false);
+
+  // ===== SOCKET =====
+=======
+>>>>>>> Stashed changes
   AppState,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
@@ -21,10 +39,18 @@ export default function App() {
   const [connected, setConnected] = useState(false);
   const [notification, setNotification] = useState(null);
   const flatListRef = useRef(null);
+>>>>>>> 265a1b88e8d0626d64db4114a3a91d6c6bb3f8a7
   const socketRef = useRef(null);
   const appState = useRef(AppState.currentState);
   const [isInForeground, setIsInForeground] = useState(true);
 
+<<<<<<< HEAD
+  // ===== STATUS =====
+  const [connected, setConnected] = useState(false);
+
+  // ===== AGENTES =====
+  const [agents, setAgents] = useState([]);
+=======
   useEffect(() => {
     const subscription = AppState.addEventListener('change', nextAppState => {
       console.log('🔄 Estado do app mudou:', appState.current, '→', nextAppState);
@@ -65,19 +91,46 @@ export default function App() {
 
   function connectSocket() {
     console.log('🔌 Conectando ao servidor:', SOCKET_URL);
+>>>>>>> 265a1b88e8d0626d64db4114a3a91d6c6bb3f8a7
 
-    socketRef.current = io(SOCKET_URL, {
-      transports: ['websocket', 'polling'],
-      reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000,
+  // ===== CONVERSAS =====
+  const [conversations, setConversations] = useState([]);
+  const [selectedConversation, setSelectedConversation] = useState(null);
+
+  // ===== MENSAGENS =====
+  const [messages, setMessages] = useState([]);
+  const [text, setText] = useState("");
+
+  // --------------------------------
+  function handleConnect() {
+    if (!number) return;
+    console.log("Tentando conectar em:", SERVER_URL)
+
+    socketRef.current = io(SERVER_URL, {
+      transports: ["websocket"]
     });
 
+<<<<<<< HEAD
+    const socket = socketRef.current;
+
+    socket.on("connect", () => {
+      console.log("✅ Mobile conectado:", socket.id);
+
+=======
     socketRef.current.on('connect', () => {
       console.log('✅ Socket conectado! ID:', socketRef.current.id);
+<<<<<<< Updated upstream
+=======
+>>>>>>> 265a1b88e8d0626d64db4114a3a91d6c6bb3f8a7
+>>>>>>> Stashed changes
       setConnected(true);
-    });
+      setLogged(true);
 
+<<<<<<< HEAD
+      socket.emit("login", {
+        number,
+        role: "mobile"
+=======
     socketRef.current.on('disconnect', () => {
       console.log('❌ Socket desconectado');
       setConnected(false);
@@ -125,12 +178,49 @@ export default function App() {
           return prev;
         }
         return [...prev, normalized];
+>>>>>>> 265a1b88e8d0626d64db4114a3a91d6c6bb3f8a7
       });
+    });
 
-      scrollToBottom();
+    socket.on("agents:list", (list) => {
+      console.log("👥 Atendentes:", list);
+      setAgents(list);
+    });
+
+    socket.on("conversation:created", (conv) => {
+      console.log("✅ Nova conversa:", conv);
+      setConversations(prev => [...prev, conv]);
+      setSelectedConversation(conv);
+      setMessages([]);
+    });
+
+    socket.on("conversation:history", (msgs) => {
+      console.log("📜 Histórico:", msgs.length);
+      setMessages(msgs);
+    });
+
+    socket.on("message", (msg) => {
+      console.log("📩 Msg:", msg);
+
+      if (msg.conversation_id === selectedConversation?.id) {
+        setMessages(prev => [...prev, msg]);
+      }
+    });
+
+    socket.on("disconnect", () => {
+      console.log("❌ Desconectado");
+      setConnected(false);
+      setLogged(false);
     });
   }
 
+<<<<<<< HEAD
+  // --------------------------------
+  function startConversation(agent) {
+    socketRef.current.emit("conversation:start", {
+      with: agent.number
+    });
+=======
   function handleSendMessage(text) {
     if (!text.trim()) return;
 
@@ -155,22 +245,81 @@ export default function App() {
     } else {
       console.warn('⚠️ Socket não conectado');
     }
+>>>>>>> 265a1b88e8d0626d64db4114a3a91d6c6bb3f8a7
   }
 
-  function scrollToBottom() {
-    setTimeout(() => {
-      flatListRef.current?.scrollToEnd({ animated: true });
-    }, 100);
+  // --------------------------------
+  function sendMessage() {
+    if (!text.trim() || !selectedConversation) return;
+
+    socketRef.current.emit("message:send", {
+      conversation_id: selectedConversation.id,
+      text
+    });
+
+    setText("");
   }
 
+<<<<<<< Updated upstream
+=======
+<<<<<<< HEAD
+  // --------------------------------
+
+  if (!logged) {
+    // ===== LOGIN SCREEN =====
+    return (
+      <SafeAreaView style={styles.center}>
+        <Text style={styles.title}>Login</Text>
+
+        <TextInput
+          placeholder="Seu número"
+          value={number}
+          onChangeText={setNumber}
+          style={styles.input}
+          keyboardType="numeric"
+        />
+
+        <TouchableOpacity
+          style={styles.btn}
+          onPress={handleConnect}
+        >
+          <Text style={styles.btnText}>Conectar</Text>
+        </TouchableOpacity>
+
+        <Text style={{ marginTop: 10 }}>
+          {connected ? "🟢 Conectado" : "🔴 Desconectado"}
+        </Text>
+      </SafeAreaView>
+    );
+  }
+
+  // --------------------------------
+
+=======
+>>>>>>> Stashed changes
   function handleNotificationPress(message) {
     console.log('👆 Usuário clicou na notificação:', message);
     setNotification(null);
   }
 
+<<<<<<< Updated upstream
+=======
+>>>>>>> 265a1b88e8d0626d64db4114a3a91d6c6bb3f8a7
+>>>>>>> Stashed changes
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar style="light" />
+      
+      {/* SIDEBAR - CONVERSAS */}
+      <View style={styles.sidebar}>
+        <Text style={styles.subtitle}>Conversas</Text>
+
+<<<<<<< HEAD
+=======
+      <NotificationBanner
+        message={notification}
+        onPress={handleNotificationPress}
+        onDismiss={() => setNotification(null)}
+      />
 
       <NotificationBanner
         message={notification}
@@ -194,90 +343,264 @@ export default function App() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
+>>>>>>> 265a1b88e8d0626d64db4114a3a91d6c6bb3f8a7
         <FlatList
-          ref={flatListRef}
-          data={messages}
-          keyExtractor={(item, index) => {
-            if (item && item.id !== undefined && item.id !== null) return String(item.id);
-            if (item && item.senderId) return String(item.senderId);
-            return String(index);
-          }}
-          renderItem={({ item }) => {
-            const isOwn = String(item.senderId) === String(socketRef.current?.id);
-            return <MessageBubble message={item} isOwn={isOwn} />;
-          }}
-          contentContainerStyle={styles.messagesList}
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>
-                {connected ? 'Nenhuma mensagem ainda.\nEnvie a primeira!' : 'Conectando ao servidor...'}
-              </Text>
-            </View>
-          }
+          data={conversations}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={[
+                styles.chatItem,
+                selectedConversation?.id === item.id && styles.selected
+              ]}
+              onPress={() => {
+                setSelectedConversation(item);
+
+                socketRef.current.emit("conversation:history", {
+                  conversation_id: item.id
+                });
+              }}
+            >
+              <Text>{item.with}</Text>
+            </TouchableOpacity>
+          )}
         />
 
-        <MessageInput onSend={handleSendMessage} />
-      </KeyboardAvoidingView>
+        <Text style={styles.subtitle}>Atendentes Online</Text>
+
+        <FlatList
+          data={agents}
+          keyExtractor={(item) => item.number}
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={styles.agentBtn}
+              onPress={() => startConversation(item)}
+            >
+              <Text style={{ color: "#fff" }}>
+                {item.number}
+              </Text>
+            </TouchableOpacity>
+          )}
+        />
+
+      </View>
+
+      {/* CHAT */}
+      <View style={styles.chat}>
+        {!selectedConversation ? (
+          <Text style={styles.empty}>
+            Selecione ou inicie uma conversa
+          </Text>
+        ) : (
+          <>
+            <Text style={styles.chatTitle}>
+              Conversa com {selectedConversation.with}
+            </Text>
+
+            <FlatList
+              data={messages}
+              keyExtractor={(item) => item.id}
+              style={styles.messages}
+              renderItem={({ item }) => (
+                <View
+                  style={[
+                    styles.bubble,
+                    item.from === number
+                      ? styles.ownBubble
+                      : styles.otherBubble,
+                  ]}
+                >
+                  <Text style={styles.sender}>
+                    {item.from}
+                  </Text>
+
+                  <Text style={styles.msg}>
+                    {item.text}
+                  </Text>
+                </View>
+              )}
+            />
+
+            <View style={styles.inputRow}>
+              <TextInput
+                style={styles.msgInput}
+                value={text}
+                placeholder="Digite..."
+                onChangeText={setText}
+              />
+
+              <TouchableOpacity
+                style={styles.sendBtn}
+                onPress={sendMessage}
+              >
+                <Text style={{ color: "#fff" }}>
+                  Enviar
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+          </>
+        )}
+      </View>
+
     </SafeAreaView>
   );
 }
 
+// =======================================================
+
 const styles = StyleSheet.create({
+  center: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center"
+  },
+
+  title: {
+    fontSize: 28,
+    marginBottom: 20
+  },
+
+  input: {
+    borderWidth: 1,
+    width: "80%",
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 10
+  },
+
+  btn: {
+    marginTop: 10,
+    backgroundColor: "#667eea",
+    paddingVertical: 12,
+    paddingHorizontal: 35,
+    borderRadius: 20
+  },
+
+  btnText: {
+    color: "#fff",
+    fontWeight: "bold"
+  },
+
   container: {
     flex: 1,
-    backgroundColor: '#007AFF',
+    flexDirection: "row",
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 15,
-    backgroundColor: '#007AFF',
+
+  sidebar: {
+    width: 140,
+    backgroundColor: "#EEE",
+    padding: 8
   },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#fff',
+
+  subtitle: {
+    fontWeight: "bold",
+    marginBottom: 6,
+    marginTop: 8
+  },
+
+  chatItem: {
+    padding: 8,
+    backgroundColor: "#ddd",
+    borderRadius: 6,
+    marginBottom: 4
+  },
+
+  selected: {
+    backgroundColor: "#bbb"
+  },
+
+  agentBtn: {
+    padding: 8,
+    backgroundColor: "#667eea",
+    borderRadius: 6,
+    marginBottom: 4,
+    alignItems: "center"
+  },
+
+  chat: {
     flex: 1,
+    padding: 10
   },
-  statusIndicator: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#ff3b30',
-    marginRight: 8,
+
+  empty: {
+    marginTop: 100,
+    textAlign: "center"
   },
-  statusConnected: {
-    backgroundColor: '#34c759',
+
+  chatTitle: {
+    fontWeight: "bold",
+    fontSize: 18,
+    marginBottom: 10,
+    textAlign: "center"
   },
+<<<<<<< HEAD
+
+  messages: {
+    flex: 1
+=======
   statusText: {
     fontSize: 12,
     color: '#fff',
     opacity: 0.8,
     marginRight: 8,
+<<<<<<< Updated upstream
   },
   appStateText: {
     fontSize: 16,
+=======
+>>>>>>> Stashed changes
   },
-  chatContainer: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
-  messagesList: {
-    paddingVertical: 10,
-    paddingHorizontal: 10,
-    flexGrow: 1,
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingTop: 100,
-  },
-  emptyText: {
+  appStateText: {
     fontSize: 16,
-    color: '#999',
-    textAlign: 'center',
-    lineHeight: 24,
+>>>>>>> 265a1b88e8d0626d64db4114a3a91d6c6bb3f8a7
   },
+
+  bubble: {
+    padding: 8,
+    borderRadius: 8,
+    marginBottom: 8,
+    maxWidth: "80%"
+  },
+
+  ownBubble: {
+    backgroundColor: "#667eea",
+    alignSelf: "flex-end"
+  },
+
+  otherBubble: {
+    backgroundColor: "#ddd",
+    alignSelf: "flex-start"
+  },
+
+  sender: {
+    fontSize: 10,
+    fontWeight: "bold",
+    color: "#333"
+  },
+
+  msg: {
+    fontSize: 14,
+  },
+
+  inputRow: {
+    flexDirection: "row",
+    marginTop: 6,
+    alignItems: "center"
+  },
+
+  msgInput: {
+    flex: 1,
+    borderWidth: 1,
+    padding: 10,
+    borderRadius: 20,
+    marginRight: 6
+  },
+
+  sendBtn: {
+    backgroundColor: "#667eea",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20
+  }
 });
