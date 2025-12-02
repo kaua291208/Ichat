@@ -6,12 +6,13 @@ import {
   StyleSheet,
   FlatList,
   SafeAreaView,
-  TextInput
+  TextInput,
+  Alert
 } from "react-native";
 
 import { io } from "socket.io-client";
 
-const SERVER_URL = "http://10.1.157.74:3000";
+const SERVER_URL = "http://192.168.0.191:3000";
 
 export default function App() {
 
@@ -38,10 +39,10 @@ export default function App() {
 
   // --------------------------------
   function handleConnect() {
-    if (!number) return;
-    console.log("Tentando conectar em:", SERVER_URL)
+    if (!number. trim()) return;
+    console.log("Tentando conectar em:", SERVER_URL);
 
-    socketRef.current = io(SERVER_URL, {
+    socketRef. current = io(SERVER_URL, {
       transports: ["websocket"]
     });
 
@@ -64,24 +65,50 @@ export default function App() {
       setAgents(list);
     });
 
+    // Carrega conversas existentes
+    socket.on("conversations:load", (convs) => {
+      console.log("📚 Conversas carregadas:", convs);
+      setConversations(convs);
+    });
+
     socket.on("conversation:created", (conv) => {
       console.log("✅ Nova conversa:", conv);
-      setConversations(prev => [...prev, conv]);
+      
+      // Verifica se a conversa já existe
+      setConversations(prev => {
+        const exists = prev.find(c => c. id === conv.id);
+        if (exists) return prev;
+        return [...prev, conv];
+      });
+      
       setSelectedConversation(conv);
       setMessages([]);
+      
+      // Carrega o histórico
+      socket.emit("conversation:history", {
+        conversation_id: conv.id,
+      });
     });
 
     socket.on("conversation:history", (msgs) => {
-      console.log("📜 Histórico:", msgs.length);
+      console.log("📜 Histórico:", msgs. length);
       setMessages(msgs);
     });
 
     socket.on("message", (msg) => {
       console.log("📩 Msg:", msg);
 
-      if (msg.conversation_id === selectedConversation?.id) {
-        setMessages(prev => [...prev, msg]);
-      }
+      setMessages(prev => {
+        // Evita duplicatas
+        const exists = prev.find(m => m.id === msg.id);
+        if (exists) return prev;
+        return [...prev, msg];
+      });
+    });
+
+    socket. on("error", (err) => {
+      console.error("❌ Erro:", err);
+      Alert.alert("Erro", err.message);
     });
 
     socket.on("disconnect", () => {
@@ -93,7 +120,20 @@ export default function App() {
 
   // --------------------------------
   function startConversation(agent) {
-    socketRef.current.emit("conversation:start", {
+    console.log("🔄 Iniciando conversa com:", agent.number);
+    
+    // Verifica se já existe conversa com este agente
+    const existing = conversations.find(c => c.with === agent.number);
+    if (existing) {
+      console.log("✅ Conversa já existe, selecionando...");
+      setSelectedConversation(existing);
+      socketRef.current. emit("conversation:history", {
+        conversation_id: existing.id,
+      });
+      return;
+    }
+
+    socketRef. current.emit("conversation:start", {
       with: agent.number
     });
   }
@@ -116,14 +156,13 @@ export default function App() {
     // ===== LOGIN SCREEN =====
     return (
       <SafeAreaView style={styles.center}>
-        <Text style={styles.title}>Login</Text>
+        <Text style={styles.title}>Login - Cliente</Text>
 
         <TextInput
           placeholder="Seu número"
           value={number}
           onChangeText={setNumber}
           style={styles.input}
-          keyboardType="numeric"
         />
 
         <TouchableOpacity
@@ -147,53 +186,62 @@ export default function App() {
       
       {/* SIDEBAR - CONVERSAS */}
       <View style={styles.sidebar}>
-        <Text style={styles.subtitle}>Conversas</Text>
+        <Text style={styles.subtitle}>Minhas Conversas</Text>
+        <Text style={styles.small}>Logado: {number}</Text>
 
-        <FlatList
-          data={conversations}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              style={[
-                styles.chatItem,
-                selectedConversation?.id === item.id && styles.selected
-              ]}
-              onPress={() => {
-                setSelectedConversation(item);
+        {conversations.length === 0 ? (
+          <Text style={styles.empty}>Nenhuma conversa</Text>
+        ) : (
+          <FlatList
+            data={conversations}
+            keyExtractor={(item) => item. id}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={[
+                  styles.chatItem,
+                  selectedConversation?. id === item.id && styles. selected
+                ]}
+                onPress={() => {
+                  setSelectedConversation(item);
 
-                socketRef.current.emit("conversation:history", {
-                  conversation_id: item.id
-                });
-              }}
-            >
-              <Text>{item.with}</Text>
-            </TouchableOpacity>
-          )}
-        />
+                  socketRef.current.emit("conversation:history", {
+                    conversation_id: item.id
+                  });
+                }}
+              >
+                <Text>{item.with}</Text>
+              </TouchableOpacity>
+            )}
+          />
+        )}
 
-        <Text style={styles.subtitle}>Atendentes Online</Text>
+        <Text style={styles.subtitle}>Atendentes</Text>
 
-        <FlatList
-          data={agents}
-          keyExtractor={(item) => item.number}
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              style={styles.agentBtn}
-              onPress={() => startConversation(item)}
-            >
-              <Text style={{ color: "#fff" }}>
-                {item.number}
-              </Text>
-            </TouchableOpacity>
-          )}
-        />
+        {agents.length === 0 ? (
+          <Text style={styles.empty}>Nenhum online</Text>
+        ) : (
+          <FlatList
+            data={agents}
+            keyExtractor={(item) => item.number}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={styles.agentBtn}
+                onPress={() => startConversation(item)}
+              >
+                <Text style={{ color: "#fff" }}>
+                  {item. number}
+                </Text>
+              </TouchableOpacity>
+            )}
+          />
+        )}
 
       </View>
 
       {/* CHAT */}
       <View style={styles.chat}>
         {!selectedConversation ? (
-          <Text style={styles.empty}>
+          <Text style={styles.emptyChat}>
             Selecione ou inicie uma conversa
           </Text>
         ) : (
@@ -206,12 +254,17 @@ export default function App() {
               data={messages}
               keyExtractor={(item) => item.id}
               style={styles.messages}
+              ListEmptyComponent={() => (
+                <Text style={styles.emptyChat}>
+                  Nenhuma mensagem ainda
+                </Text>
+              )}
               renderItem={({ item }) => (
                 <View
                   style={[
                     styles.bubble,
                     item.from === number
-                      ? styles.ownBubble
+                      ? styles. ownBubble
                       : styles.otherBubble,
                   ]}
                 >
@@ -219,7 +272,7 @@ export default function App() {
                     {item.from}
                   </Text>
 
-                  <Text style={styles.msg}>
+                  <Text style={styles. msg}>
                     {item.text}
                   </Text>
                 </View>
@@ -228,10 +281,11 @@ export default function App() {
 
             <View style={styles.inputRow}>
               <TextInput
-                style={styles.msgInput}
+                style={styles. msgInput}
                 value={text}
                 placeholder="Digite..."
                 onChangeText={setText}
+                onSubmitEditing={sendMessage}
               />
 
               <TouchableOpacity
@@ -254,7 +308,7 @@ export default function App() {
 
 // =======================================================
 
-const styles = StyleSheet.create({
+const styles = StyleSheet. create({
   center: {
     flex: 1,
     justifyContent: "center",
@@ -304,6 +358,19 @@ const styles = StyleSheet.create({
     marginTop: 8
   },
 
+  small: {
+    fontSize: 10,
+    color: "#666",
+    marginBottom: 8
+  },
+
+  empty: {
+    fontSize: 11,
+    color: "#999",
+    marginBottom: 8,
+    fontStyle: "italic"
+  },
+
   chatItem: {
     padding: 8,
     backgroundColor: "#ddd",
@@ -328,9 +395,10 @@ const styles = StyleSheet.create({
     padding: 10
   },
 
-  empty: {
+  emptyChat: {
     marginTop: 100,
-    textAlign: "center"
+    textAlign: "center",
+    color: "#999"
   },
 
   chatTitle: {

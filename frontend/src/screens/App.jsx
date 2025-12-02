@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { io } from "socket.io-client";
 
-const SERVER_URL = "http://10.1.157.74:3000";
+const SERVER_URL = "http://192.168.0.191:3000";
 
 export default function App() {
   // LOGIN
@@ -34,7 +34,7 @@ export default function App() {
 
   // ========= LOGIN ==========
   const handleConnect = () => {
-    if (!number.trim()) return;
+    if (! number. trim()) return;
 
     socketRef.current = io(SERVER_URL, {
       transports: ["websocket"],
@@ -56,26 +56,57 @@ export default function App() {
 
     socket.on("agents:list", (list) => {
       console.log("👥 Atendentes:", list);
-      setAgents(list);
+      // Remove o próprio usuário da lista de atendentes
+      const filtered = list.filter(a => a.number !== number);
+      setAgents(filtered);
+    });
+
+    // Carrega conversas existentes
+    socket.on("conversations:load", (convs) => {
+      console.log("📚 Conversas carregadas:", convs);
+      setConversations(convs);
     });
 
     socket.on("conversation:created", (conv) => {
       console.log("✅ Nova conversa:", conv);
-      setConversations((prev) => [...prev, conv]);
+      
+      // Verifica se a conversa já existe
+      setConversations((prev) => {
+        const exists = prev.find(c => c.id === conv.id);
+        if (exists) {
+          return prev;
+        }
+        return [...prev, conv];
+      });
+      
       setSelectedConversation(conv);
       setMessages([]);
+      
+      // Carrega o histórico da conversa
+      socket.emit("conversation:history", {
+        conversation_id: conv. id,
+      });
     });
 
-    socket.on("conversation:history", (msgs) => {
+    socket. on("conversation:history", (msgs) => {
+      console.log("📜 Histórico:", msgs);
       setMessages(msgs);
     });
 
-    socket.on("message", (msg) => {
+    socket. on("message", (msg) => {
       console.log("📩 Recebendo:", msg);
 
-      if (msg.conversation_id === selectedConversation?.id) {
-        setMessages((prev) => [...prev, msg]);
-      }
+      setMessages((prev) => {
+        // Evita duplicatas
+        const exists = prev.find(m => m.id === msg.id);
+        if (exists) return prev;
+        return [...prev, msg];
+      });
+    });
+
+    socket.on("error", (err) => {
+      console.error("❌ Erro:", err);
+      alert(err.message);
     });
 
     socket.on("disconnect", () => {
@@ -86,6 +117,19 @@ export default function App() {
 
   // ========= CRIAR CONVERSA =========
   const startConversation = (agent) => {
+    console.log("🔄 Iniciando conversa com:", agent. number);
+    
+    // Verifica se já existe conversa com este agente
+    const existing = conversations.find(c => c.with === agent.number);
+    if (existing) {
+      console.log("✅ Conversa já existe, selecionando.. .");
+      setSelectedConversation(existing);
+      socketRef.current. emit("conversation:history", {
+        conversation_id: existing.id,
+      });
+      return;
+    }
+
     socketRef.current.emit("conversation:start", {
       with: agent.number,
     });
@@ -109,16 +153,17 @@ export default function App() {
     // TELA DE LOGIN
     return (
       <div style={styles.center}>
-        <h1>Login</h1>
+        <h1>Login - Atendente</h1>
 
         <input
           placeholder="Seu número / ID"
           value={number}
           onChange={(e) => setNumber(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && handleConnect()}
           style={styles.input}
         />
 
-        <button onClick={handleConnect} style={styles.button}>
+        <button onClick={handleConnect} style={styles. button}>
           Conectar
         </button>
 
@@ -133,46 +178,61 @@ export default function App() {
     <div style={styles.container}>
       {/* LISTA DE CONVERSAS */}
       <div style={styles.sidebar}>
-        <h3>Conversas</h3>
+        <div style={styles.header}>
+          <h3>Conversas</h3>
+          <small>Logado: {number}</small>
+        </div>
 
-        {conversations.map((conv) => (
-          <div
-            key={conv.id}
-            style={{
-              ...styles.chatItem,
-              background:
-                selectedConversation?.id === conv.id
-                  ? "#ddd"
-                  : "#f5f5f5",
-            }}
-            onClick={() => {
-              setSelectedConversation(conv);
-              socketRef.current.emit("conversation:history", {
-                conversation_id: conv.id,
-              });
-            }}
-          >
-            {conv.with}
-          </div>
-        ))}
+        {conversations.length === 0 ? (
+          <p style={{ padding: 10, fontSize: 12, color: "#666" }}>
+            Nenhuma conversa ainda
+          </p>
+        ) : (
+          conversations.map((conv) => (
+            <div
+              key={conv.id}
+              style={{
+                ...styles.chatItem,
+                background:
+                  selectedConversation?.id === conv. id ? "#bbb" : "#f5f5f5",
+              }}
+              onClick={() => {
+                setSelectedConversation(conv);
+                socketRef.current.emit("conversation:history", {
+                  conversation_id: conv.id,
+                });
+              }}
+            >
+              {conv.with}
+            </div>
+          ))
+        )}
 
-        <h4>Nova conversa</h4>
+        <hr />
 
-        {agents.map((agent) => (
-          <button
-            key={agent.number}
-            style={styles.agentBtn}
-            onClick={() => startConversation(agent)}
-          >
-            {agent.number}
-          </button>
-        ))}
+        <h4>Atendentes Online</h4>
+
+        {agents.length === 0 ? (
+          <p style={{ padding: 10, fontSize: 12, color: "#666" }}>
+            Nenhum atendente online
+          </p>
+        ) : (
+          agents.map((agent) => (
+            <button
+              key={agent.number}
+              style={styles.agentBtn}
+              onClick={() => startConversation(agent)}
+            >
+              {agent.number}
+            </button>
+          ))
+        )}
       </div>
 
       {/* CHAT */}
       <div style={styles.chat}>
-        {!selectedConversation ? (
-          <p style={{ textAlign: "center" }}>
+        {! selectedConversation ? (
+          <p style={{ textAlign: "center", marginTop: 50 }}>
             Selecione ou inicie uma conversa
           </p>
         ) : (
@@ -180,26 +240,29 @@ export default function App() {
             <h2>Conversa com {selectedConversation.with}</h2>
 
             <div style={styles.messages}>
-              {messages.map((msg) => (
-                <div
-                  key={msg.id}
-                  style={{
-                    alignSelf:
-                      msg.from === number ? "flex-end" : "flex-start",
-                    background:
-                      msg.from === number ? "#667eea" : "#fff",
-                    color:
-                      msg.from === number ? "#fff" : "#333",
-                    padding: 10,
-                    margin: 5,
-                    borderRadius: 10,
-                    maxWidth: "70%",
-                  }}
-                >
-                  <small>{msg.from}</small>
-                  <div>{msg.text}</div>
-                </div>
-              ))}
+              {messages.length === 0 ? (
+                <p style={{ textAlign: "center", color: "#666" }}>
+                  Nenhuma mensagem ainda
+                </p>
+              ) : (
+                messages.map((msg) => (
+                  <div
+                    key={msg. id}
+                    style={{
+                      alignSelf: msg.from === number ? "flex-end" : "flex-start",
+                      background: msg.from === number ? "#667eea" : "#fff",
+                      color: msg. from === number ? "#fff" : "#333",
+                      padding: 10,
+                      margin: 5,
+                      borderRadius: 10,
+                      maxWidth: "70%",
+                    }}
+                  >
+                    <small>{msg.from}</small>
+                    <div>{msg.text}</div>
+                  </div>
+                ))
+              )}
 
               <div ref={endRef} />
             </div>
@@ -212,7 +275,7 @@ export default function App() {
                 onChange={(e) => setText(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && sendMessage()}
               />
-              <button onClick={sendMessage} style={styles.button}>
+              <button onClick={sendMessage} style={styles. button}>
                 Enviar
               </button>
             </div>
@@ -241,6 +304,9 @@ const styles = {
     padding: 10,
     overflowY: "auto",
   },
+  header: {
+    marginBottom: 10,
+  },
   chatItem: {
     padding: 10,
     borderRadius: 6,
@@ -252,6 +318,10 @@ const styles = {
     padding: 8,
     margin: "4px 0",
     cursor: "pointer",
+    background: "#667eea",
+    color: "#fff",
+    border: "none",
+    borderRadius: 6,
   },
   chat: {
     flex: 1,
