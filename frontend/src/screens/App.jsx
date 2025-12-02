@@ -1,290 +1,303 @@
+
 import { useState, useEffect, useRef } from "react";
 import { io } from "socket.io-client";
 
-const SERVER_URL = "http://10.1.157.74:3000";
+const App = () => {
+  const [mensagems, setMensagems] = useState([]);
+  const [conectado, setConectado] = useState(false);
+  const [mensagem, setMensagem] = useState("");
+  const [mySocketId, setMySocketId] = useState(null);
 
-export default function App() {
-  // LOGIN
-  const [number, setNumber] = useState("");
-  const [logged, setLogged] = useState(false);
-
-  // SOCKET
   const socketRef = useRef(null);
+  const messagesEndRef = useRef(null);
 
-  // STATUS
-  const [connected, setConnected] = useState(false);
-
-  // LISTA DE ATENDENTES
-  const [agents, setAgents] = useState([]);
-
-  // CONVERSAS
-  const [conversations, setConversations] = useState([]);
-  const [selectedConversation, setSelectedConversation] = useState(null);
-
-  // CHAT
-  const [messages, setMessages] = useState([]);
-  const [text, setText] = useState("");
-
-  const endRef = useRef(null);
-
-  // SCROLL
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    const SERVER_URL =  "http://10.1.156.206:3000";
 
-  // ========= LOGIN ==========
-  const handleConnect = () => {
-    if (!number.trim()) return;
 
     socketRef.current = io(SERVER_URL, {
       transports: ["websocket"],
+      autoConnect: true,
     });
 
     const socket = socketRef.current;
 
-    socket.on("connect", () => {
-      console.log("✅ conectado:", socket.id);
-      setConnected(true);
+    async function loadHistory() {
+      try {
+        console.log("📜 Carregando histórico...");
+        const response = await fetch(`${SERVER_URL}/api/messages`);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const history = await response.json();
 
-      socket.emit("login", {
-        number,
-        role: "web",
-      });
+        const normalized = history
+          .map((msg) => ({
+            id: msg.id,
+            text: msg.text,
+            senderId: msg.sender_id,
+            senderName: msg.sender_name,
+            socketId: msg.socket_id ?? msg.socketId ?? null,
+            time:
+              msg.time ||
+              (msg.created_at
+                ? new Date(msg.created_at).toLocaleTimeString("pt-BR", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })
+                : new Date().toLocaleTimeString("pt-BR", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })),
+            createdAt: msg.created_at ?? msg.createdAt ?? null,
+          }))
 
-      setLogged(true);
-    });
+          .sort((a, b) => {
+            if (a.createdAt && b.createdAt) return new Date(a.createdAt) - new Date(b.createdAt);
+            return 0;
+          });
 
-    socket.on("agents:list", (list) => {
-      console.log("👥 Atendentes:", list);
-      setAgents(list);
-    });
-
-    socket.on("conversation:created", (conv) => {
-      console.log("✅ Nova conversa:", conv);
-      setConversations((prev) => [...prev, conv]);
-      setSelectedConversation(conv);
-      setMessages([]);
-    });
-
-    socket.on("conversation:history", (msgs) => {
-      setMessages(msgs);
-    });
-
-    socket.on("message", (msg) => {
-      console.log("📩 Recebendo:", msg);
-
-      if (msg.conversation_id === selectedConversation?.id) {
-        setMessages((prev) => [...prev, msg]);
+        console.log(`✅ ${normalized.length} mensagens carregadas`);
+        setMensagems(normalized);
+      } catch (error) {
+        console.error("❌ Erro ao carregar histórico:", error);
       }
+    }
+
+
+    loadHistory();
+
+    socket.on("connect", () => {
+      console.log("✅ Conectado ao servidor:", socket.id);
+      setConectado(true);
+      setMySocketId(socket.id);
+    });
+
+    socket.on("message", (data) => {
+      console.log("📩 Mensagem recebida:", data);
+
+
+      setMensagems((prev) => {
+        const exists = prev.some((msg) => msg.id === data.id);
+        if (exists) return prev;
+        return [...prev, data];
+      });
     });
 
     socket.on("disconnect", () => {
-      setConnected(false);
-      setLogged(false);
-    });
-  };
-
-  // ========= CRIAR CONVERSA =========
-  const startConversation = (agent) => {
-    socketRef.current.emit("conversation:start", {
-      with: agent.number,
-    });
-  };
-
-  // ========= ENVIAR =========
-  const sendMessage = () => {
-    if (!text.trim() || !selectedConversation) return;
-
-    socketRef.current.emit("message:send", {
-      conversation_id: selectedConversation.id,
-      text,
+      console.log("❌ Desconectado");
+      setConectado(false);
+      setMySocketId(null);
     });
 
-    setText("");
+
+    return () => {
+      socket.off("connect");
+      socket.off("message");
+      socket.off("disconnect");
+      socket.disconnect();
+      socketRef.current = null;
+    };
+  }, []);
+
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [mensagems]);
+
+  const sendMensage = () => {
+    if (mensagem.trim().length === 0) return;
+    const socket = socketRef.current;
+    const now = new Date();
+    const newMessage = {
+      id: `${Date.now()}-${socket?.id ?? "local"}`,
+      text: mensagem.trim(),
+      sender: "Web",
+      senderId: socket?.id ?? mySocketId,
+      senderName: "Web",
+      socketId: socket?.id ?? mySocketId,
+      time: now.toLocaleTimeString("pt-BR", {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      createdAt: now.toISOString(),
+    };
+
+    console.log("📤 Enviando:", newMessage);
+
+
+    setMensagems((prev) => [...prev, newMessage]);
+
+
+    if (socket && socket.connected) {
+      socket.emit("message", newMessage);
+    } else {
+      console.warn("Socket não conectado — mensagem não enviada ao servidor.");
+    }
+
+    setMensagem("");
   };
 
-  // ======================================================
-
-  if (!logged) {
-    // TELA DE LOGIN
-    return (
-      <div style={styles.center}>
-        <h1>Login</h1>
-
-        <input
-          placeholder="Seu número / ID"
-          value={number}
-          onChange={(e) => setNumber(e.target.value)}
-          style={styles.input}
-        />
-
-        <button onClick={handleConnect} style={styles.button}>
-          Conectar
-        </button>
-
-        <p>{connected ? "🟢 Conectado" : "🔴 Desconectado"}</p>
-      </div>
-    );
-  }
-
-  // ======================================================
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter") sendMensage();
+  };
 
   return (
-    <div style={styles.container}>
-      {/* LISTA DE CONVERSAS */}
-      <div style={styles.sidebar}>
-        <h3>Conversas</h3>
+    <div style={styles.appContainer}>
+      <h1 style={styles.title}>💬 Chat em Tempo Real</h1>
 
-        {conversations.map((conv) => (
-          <div
-            key={conv.id}
-            style={{
-              ...styles.chatItem,
-              background:
-                selectedConversation?.id === conv.id
-                  ? "#ddd"
-                  : "#f5f5f5",
-            }}
-            onClick={() => {
-              setSelectedConversation(conv);
-              socketRef.current.emit("conversation:history", {
-                conversation_id: conv.id,
-              });
-            }}
-          >
-            {conv.with}
-          </div>
-        ))}
-
-        <h4>Nova conversa</h4>
-
-        {agents.map((agent) => (
-          <button
-            key={agent.number}
-            style={styles.agentBtn}
-            onClick={() => startConversation(agent)}
-          >
-            {agent.number}
-          </button>
-        ))}
+      <div
+        style={{
+          ...styles.statusBox,
+          ...(conectado ? styles.statusConnected : styles.statusDisconnected),
+        }}
+      >
+        {conectado ? "🟢 Conectado" : "🔴 Desconectado"}
       </div>
 
-      {/* CHAT */}
-      <div style={styles.chat}>
-        {!selectedConversation ? (
-          <p style={{ textAlign: "center" }}>
-            Selecione ou inicie uma conversa
-          </p>
+      {/* Área de mensagens */}
+      <div style={styles.messagesArea}>
+        {mensagems.length === 0 ? (
+          <p style={styles.emptyText}>Nenhuma mensagem ainda... Seja o primeiro! 🚀</p>
         ) : (
-          <>
-            <h2>Conversa com {selectedConversation.with}</h2>
-
-            <div style={styles.messages}>
-              {messages.map((msg) => (
-                <div
-                  key={msg.id}
-                  style={{
-                    alignSelf:
-                      msg.from === number ? "flex-end" : "flex-start",
-                    background:
-                      msg.from === number ? "#667eea" : "#fff",
-                    color:
-                      msg.from === number ? "#fff" : "#333",
-                    padding: 10,
-                    margin: 5,
-                    borderRadius: 10,
-                    maxWidth: "70%",
-                  }}
-                >
-                  <small>{msg.from}</small>
-                  <div>{msg.text}</div>
+          mensagems.map((msg) => {
+            const isOwn = msg.socketId && mySocketId ? msg.socketId === mySocketId : msg.senderId === mySocketId;
+            return (
+              <div
+                key={msg.id}
+                style={{
+                  ...styles.messageBubble,
+                  ...(isOwn ? styles.messageBubbleOwn : styles.messageBubbleOther),
+                }}
+              >
+                <div style={styles.messageMeta}>
+                  <strong>{msg.sender ?? msg.senderName}</strong> • {msg.time}
                 </div>
-              ))}
-
-              <div ref={endRef} />
-            </div>
-
-            <div style={styles.inputRow}>
-              <input
-                style={styles.input}
-                value={text}
-                placeholder="Digite..."
-                onChange={(e) => setText(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-              />
-              <button onClick={sendMessage} style={styles.button}>
-                Enviar
-              </button>
-            </div>
-          </>
+                <div style={styles.messageText}>{msg.text}</div>
+              </div>
+            );
+          })
         )}
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* Input e botão */}
+      <div style={styles.inputRow}>
+        <input
+          placeholder="Digite aqui a mensagem..."
+          value={mensagem}
+          onChange={(e) => setMensagem(e.target.value)}
+          onKeyDown={handleKeyDown}
+          disabled={!conectado}
+          style={styles.input}
+        />
+        <button
+          onClick={sendMensage}
+          disabled={!conectado}
+          style={{
+            ...styles.button,
+            ...(conectado ? styles.buttonEnabled : styles.buttonDisabled),
+          }}
+        >
+          Enviar 📤
+        </button>
       </div>
     </div>
   );
-}
+};
 
-// ======================================================
+export default App;
 
 const styles = {
-  center: {
+  appContainer: {
+    padding: "20px",
+    maxWidth: "600px",
+    margin: "0 auto",
+    fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial",
+  },
+  title: {
+    margin: 0,
+    marginBottom: 12,
+  },
+  statusBox: {
+    padding: "10px",
+    marginBottom: "20px",
+    borderRadius: "5px",
+    fontWeight: "bold",
+  },
+  statusConnected: {
+    background: "#d4edda",
+    color: "#155724",
+  },
+  statusDisconnected: {
+    background: "#f8d7da",
+    color: "#721c24",
+  },
+  messagesArea: {
+    height: "400px",
+    border: "1px solid #ccc",
+    padding: "15px",
+    overflowY: "auto",
+    marginBottom: "20px",
+    background: "#f5f5f5",
+    borderRadius: "8px",
+  },
+  emptyText: {
+    color: "#999",
     textAlign: "center",
-    marginTop: "150px",
+    margin: 0,
   },
-  container: {
-    display: "flex",
-    height: "100vh",
-    fontFamily: "Arial",
+  messageBubble: {
+    marginBottom: "15px",
+    padding: "12px",
+    borderRadius: "10px",
+    maxWidth: "70%",
+    boxShadow: "0 2px 5px rgba(0,0,0,0.1)",
   },
-  sidebar: {
-    width: "250px",
-    background: "#eee",
-    padding: 10,
-    overflowY: "auto",
+  messageBubbleOwn: {
+    background: "#667eea",
+    color: "white",
+    marginLeft: "auto",
+    marginRight: "0",
   },
-  chatItem: {
-    padding: 10,
-    borderRadius: 6,
-    cursor: "pointer",
-    marginBottom: 6,
+  messageBubbleOther: {
+    background: "white",
+    color: "#333",
+    marginLeft: "0",
+    marginRight: "auto",
   },
-  agentBtn: {
-    width: "100%",
-    padding: 8,
-    margin: "4px 0",
-    cursor: "pointer",
+  messageMeta: {
+    fontSize: "12px",
+    marginBottom: "5px",
+    opacity: 0.8,
   },
-  chat: {
-    flex: 1,
-    display: "flex",
-    flexDirection: "column",
-    padding: 10,
-  },
-  messages: {
-    flex: 1,
-    display: "flex",
-    flexDirection: "column",
-    overflowY: "auto",
-    background: "#f0f0f0",
-    borderRadius: 8,
-    padding: 10,
+  messageText: {
+    fontSize: "15px",
   },
   inputRow: {
     display: "flex",
-    marginTop: 10,
-    gap: 10,
+    gap: "10px",
   },
   input: {
     flex: 1,
-    padding: 10,
-    borderRadius: 20,
-    border: "1px solid #ccc",
+    padding: "12px",
+    fontSize: "16px",
+    border: "2px solid #ccc",
+    borderRadius: "25px",
+    outline: "none",
   },
   button: {
-    padding: "10px 20px",
-    background: "#667eea",
-    color: "#fff",
+    padding: "12px 25px",
+    fontSize: "16px",
+    color: "white",
     border: "none",
-    borderRadius: 20,
+    borderRadius: "25px",
+    fontWeight: "bold",
+  },
+  buttonEnabled: {
+    background: "#667eea",
     cursor: "pointer",
+  },
+  buttonDisabled: {
+    background: "#ccc",
+    cursor: "not-allowed",
   },
 };
