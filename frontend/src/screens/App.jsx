@@ -30,13 +30,13 @@ export default function App() {
   // SCROLL
   useEffect(() => {
 <<<<<<< Updated upstream
-    const SERVER_URL =  "http://192.168.0.101:3000";
+    const SERVER_URL =  "http://10.1.157.46:3000";
 =======
 <<<<<<< HEAD
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 =======
-    const SERVER_URL =  "http://192.168.0.101:3000";
+    const SERVER_URL =  "http://10.1.157.46:3000";
 >>>>>>> 265a1b88e8d0626d64db4114a3a91d6c6bb3f8a7
 >>>>>>> Stashed changes
 

@@ -7,18 +7,18 @@ const io = new Server(3000, {
 });
 
 // ======= USERS CONECTADOS =======
-const users = new Map();
+const users2 = new Map();
 // number => { socketId, role }
 
 // ======= CONVERSAS =======
-const conversations = new Map();
+const conversations2 = new Map();
 // convId => { id, users:[a,b], messages:[] }
 
 function updateAgents() {
 
   const agents = [];
 
-  for (const [number, data] of users) {
+  for (const [number, data] of users2) {
     if (data.role === "web") {
       agents.push({ number });
     }
@@ -40,7 +40,7 @@ io.on("connection", (socket) => {
 
     socket.number = number;
 
-    users.set(number, {
+    users2.set(number, {
       socketId: socket.id,
       role
     });
@@ -55,20 +55,20 @@ io.on("connection", (socket) => {
 
     const from = socket.number;
 
-    if (!from || !users.has(target)) return;
+    if (!from || !users2.has(target)) return;
 
     const id = "conv-" + Date.now();
 
     const conv = {
       id,
-      users: [from, target],
-      messages: []
+      users2: [from, target],
+      messages2: []
     };
 
-    conversations.set(id, conv);
+    conversations2.set(id, conv);
 
-    for (const u of conv.users) {
-      const sId = users.get(u).socketId;
+    for (const u of conv.users2) {
+      const sId = users2.get(u).socketId;
 
       io.to(sId).emit("conversation:created", {
         id,
@@ -81,9 +81,9 @@ io.on("connection", (socket) => {
   // ======= PEDIR HISTORICO =======
   socket.on("conversation:history", ({ conversation_id }) => {
 
-    const conv = conversations.get(conversation_id);
+    const conv = conversations2.get(conversation_id);
 
-    socket.emit("conversation:history", conv.messages || []);
+    socket.emit("conversation:history", conv.messages2 || []);
 
   });
 
@@ -94,7 +94,7 @@ io.on("connection", (socket) => {
 
     if (!from || !text) return;
 
-    const conv = conversations.get(conversation_id);
+    const conv = conversations2.get(conversation_id);
     if (!conv) return;
 
     const msg = {
@@ -105,11 +105,11 @@ io.on("connection", (socket) => {
       date: new Date()
     };
 
-    conv.messages.push(msg);
+    conv.messages2.push(msg);
 
-    for (const u of conv.users) {
+    for (const u of conv.users2) {
 
-      const sId = users.get(u)?.socketId;
+      const sId = users2.get(u)?.socketId;
 
       if (sId) {
         io.to(sId).emit("message", msg);
@@ -126,7 +126,7 @@ io.on("connection", (socket) => {
 
     console.log("❌ saiu:", socket.number);
 
-    users.delete(socket.number);
+    users2.delete(socket.number);
 
     updateAgents();
 
