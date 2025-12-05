@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { io } from "socket.io-client";
 
-const SERVER_URL = "http://192.168.0.191:3000";
+const SERVER_URL = "http://192.168.0.101:3000";
 
 export default function App() {
   // LOGIN
@@ -34,7 +34,7 @@ export default function App() {
 
   // ========= LOGIN ==========
   const handleConnect = () => {
-    if (! number. trim()) return;
+    if (!number.trim()) return;
 
     socketRef.current = io(SERVER_URL, {
       transports: ["websocket"],
@@ -56,12 +56,10 @@ export default function App() {
 
     socket.on("agents:list", (list) => {
       console.log("👥 Atendentes:", list);
-      // Remove o próprio usuário da lista de atendentes
       const filtered = list.filter(a => a.number !== number);
       setAgents(filtered);
     });
 
-    // Carrega conversas existentes
     socket.on("conversations:load", (convs) => {
       console.log("📚 Conversas carregadas:", convs);
       setConversations(convs);
@@ -70,34 +68,39 @@ export default function App() {
     socket.on("conversation:created", (conv) => {
       console.log("✅ Nova conversa:", conv);
       
-      // Verifica se a conversa já existe
       setConversations((prev) => {
         const exists = prev.find(c => c.id === conv.id);
-        if (exists) {
-          return prev;
-        }
+        if (exists) return prev;
         return [...prev, conv];
       });
       
       setSelectedConversation(conv);
       setMessages([]);
       
-      // Carrega o histórico da conversa
       socket.emit("conversation:history", {
-        conversation_id: conv. id,
+        conversation_id: conv.id,
       });
     });
 
-    socket. on("conversation:history", (msgs) => {
+    socket.on("conversation:history", (msgs) => {
       console.log("📜 Histórico:", msgs);
       setMessages(msgs);
     });
 
-    socket. on("message", (msg) => {
+    socket.on("message", (msg) => {
       console.log("📩 Recebendo:", msg);
 
       setMessages((prev) => {
-        // Evita duplicatas
+        const exists = prev.find(m => m.id === msg.id);
+        if (exists) return prev;
+        return [...prev, msg];
+      });
+    });
+
+    socket.on("message:sent", (msg) => {
+      console.log("✅ Mensagem enviada:", msg);
+      
+      setMessages(prev => {
         const exists = prev.find(m => m.id === msg.id);
         if (exists) return prev;
         return [...prev, msg];
@@ -117,14 +120,14 @@ export default function App() {
 
   // ========= CRIAR CONVERSA =========
   const startConversation = (agent) => {
-    console.log("🔄 Iniciando conversa com:", agent. number);
+    console.log("🔄 Iniciando conversa com:", agent.number);
     
-    // Verifica se já existe conversa com este agente
     const existing = conversations.find(c => c.with === agent.number);
     if (existing) {
-      console.log("✅ Conversa já existe, selecionando.. .");
+      console.log("✅ Conversa já existe, selecionando...");
       setSelectedConversation(existing);
-      socketRef.current. emit("conversation:history", {
+      setMessages([]);
+      socketRef.current.emit("conversation:history", {
         conversation_id: existing.id,
       });
       return;
@@ -139,6 +142,8 @@ export default function App() {
   const sendMessage = () => {
     if (!text.trim() || !selectedConversation) return;
 
+    console.log("📤 Enviando:", text);
+
     socketRef.current.emit("message:send", {
       conversation_id: selectedConversation.id,
       text,
@@ -150,24 +155,36 @@ export default function App() {
   // ======================================================
 
   if (!logged) {
-    // TELA DE LOGIN
     return (
-      <div style={styles.center}>
-        <h1>Login - Atendente</h1>
+      <div style={styles.loginContainer}>
+        <div style={styles.loginCard}>
+          <div style={styles.loginHeader}>
+            <h1 style={styles.loginTitle}>iChat</h1>
+            <p style={styles.loginSubtitle}>Atendente Web</p>
+          </div>
 
-        <input
-          placeholder="Seu número / ID"
-          value={number}
-          onChange={(e) => setNumber(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleConnect()}
-          style={styles.input}
-        />
+          <input
+            placeholder="Digite seu número"
+            value={number}
+            onChange={(e) => setNumber(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleConnect()}
+            style={styles.loginInput}
+          />
 
-        <button onClick={handleConnect} style={styles. button}>
-          Conectar
-        </button>
+          <button onClick={handleConnect} style={styles.loginBtn}>
+            CONECTAR
+          </button>
 
-        <p>{connected ? "🟢 Conectado" : "🔴 Desconectado"}</p>
+          <div style={styles.statusContainer}>
+            <div style={{
+              ...styles.statusDot,
+              backgroundColor: connected ? "#27ae60" : "#e74c3c"
+            }} />
+            <span style={styles.statusText}>
+              {connected ? "Conectado" : "Desconectado"}
+            </span>
+          </div>
+        </div>
       </div>
     );
   }
@@ -176,107 +193,152 @@ export default function App() {
 
   return (
     <div style={styles.container}>
-      {/* LISTA DE CONVERSAS */}
+      {/* SIDEBAR */}
       <div style={styles.sidebar}>
-        <div style={styles.header}>
-          <h3>Conversas</h3>
-          <small>Logado: {number}</small>
+        <div style={styles.sidebarHeader}>
+          <h3 style={styles.sidebarTitle}>Conversas</h3>
+          <div style={styles.userBadge}>
+            <span style={styles.userBadgeText}>{number}</span>
+          </div>
         </div>
 
-        {conversations.length === 0 ? (
-          <p style={{ padding: 10, fontSize: 12, color: "#666" }}>
-            Nenhuma conversa ainda
-          </p>
-        ) : (
-          conversations.map((conv) => (
-            <div
-              key={conv.id}
-              style={{
-                ...styles.chatItem,
-                background:
-                  selectedConversation?.id === conv. id ? "#bbb" : "#f5f5f5",
-              }}
-              onClick={() => {
-                setSelectedConversation(conv);
-                socketRef.current.emit("conversation:history", {
-                  conversation_id: conv.id,
-                });
-              }}
-            >
-              {conv.with}
-            </div>
-          ))
-        )}
+        {/* CONVERSAS */}
+        <div style={styles.section}>
+          {conversations.length === 0 ? (
+            <p style={styles.emptyText}>Nenhuma conversa</p>
+          ) : (
+            conversations.map((conv) => (
+              <div
+                key={conv.id}
+                style={{
+                  ...styles.conversationItem,
+                  backgroundColor: selectedConversation?.id === conv.id 
+                    ? "#4a7c59" 
+                    : "#2d5f43"
+                }}
+                onClick={() => {
+                  console.log("📂 Abrindo conversa:", conv.id);
+                  setSelectedConversation(conv);
+                  setMessages([]);
+                  socketRef.current.emit("conversation:history", {
+                    conversation_id: conv.id,
+                  });
+                }}
+              >
+                <div style={styles.conversationAvatar}>
+                  {conv.with.charAt(0).toUpperCase()}
+                </div>
+                <span style={styles.conversationName}>{conv.with}</span>
+              </div>
+            ))
+          )}
+        </div>
 
-        <hr />
+        <div style={styles.divider} />
 
-        <h4>Atendentes Online</h4>
-
-        {agents.length === 0 ? (
-          <p style={{ padding: 10, fontSize: 12, color: "#666" }}>
-            Nenhum atendente online
-          </p>
-        ) : (
-          agents.map((agent) => (
-            <button
-              key={agent.number}
-              style={styles.agentBtn}
-              onClick={() => startConversation(agent)}
-            >
-              {agent.number}
-            </button>
-          ))
-        )}
+        {/* ATENDENTES */}
+        <div style={styles.section}>
+          <h4 style={styles.sectionTitle}>Atendentes Online</h4>
+          
+          {agents.length === 0 ? (
+            <p style={styles.emptyText}>Nenhum disponível</p>
+          ) : (
+            agents.map((agent) => (
+              <button
+                key={agent.number}
+                style={styles.agentBtn}
+                onClick={() => startConversation(agent)}
+              >
+                <div style={styles.agentDot} />
+                {agent.number}
+              </button>
+            ))
+          )}
+        </div>
       </div>
 
-      {/* CHAT */}
-      <div style={styles.chat}>
-        {! selectedConversation ? (
-          <p style={{ textAlign: "center", marginTop: 50 }}>
-            Selecione ou inicie uma conversa
-          </p>
+      {/* CHAT AREA */}
+      <div style={styles.chatArea}>
+        {!selectedConversation ? (
+          <div style={styles.emptyChatContainer}>
+            <div style={styles.emptyChatIcon}>💬</div>
+            <h2 style={styles.emptyChatTitle}>Nenhuma conversa selecionada</h2>
+            <p style={styles.emptyChatSubtitle}>
+              Selecione uma conversa ou inicie um novo atendimento
+            </p>
+          </div>
         ) : (
           <>
-            <h2>Conversa com {selectedConversation.with}</h2>
+            {/* CHAT HEADER */}
+            <div style={styles.chatHeader}>
+              <div style={styles.chatHeaderAvatar}>
+                {selectedConversation.with.charAt(0).toUpperCase()}
+              </div>
+              <div>
+                <h2 style={styles.chatHeaderName}>
+                  {selectedConversation.with}
+                </h2>
+                <span style={styles.chatHeaderStatus}>Online</span>
+              </div>
+            </div>
 
+            {/* MESSAGES */}
             <div style={styles.messages}>
               {messages.length === 0 ? (
-                <p style={{ textAlign: "center", color: "#666" }}>
-                  Nenhuma mensagem ainda
-                </p>
+                <div style={styles.emptyMessagesContainer}>
+                  <p style={styles.emptyMessagesText}>Nenhuma mensagem ainda</p>
+                  <p style={styles.emptyMessagesSubtext}>Envie uma mensagem para iniciar</p>
+                </div>
               ) : (
                 messages.map((msg) => (
                   <div
-                    key={msg. id}
+                    key={msg.id}
                     style={{
+                      ...styles.messageBubble,
                       alignSelf: msg.from === number ? "flex-end" : "flex-start",
-                      background: msg.from === number ? "#667eea" : "#fff",
-                      color: msg. from === number ? "#fff" : "#333",
-                      padding: 10,
-                      margin: 5,
-                      borderRadius: 10,
-                      maxWidth: "70%",
+                      backgroundColor: msg.from === number ? "#2d5f43" : "#fff",
+                      borderBottomRightRadius: msg.from === number ? "4px" : "16px",
+                      borderBottomLeftRadius: msg.from === number ? "16px" : "4px",
+                      border: msg.from === number ? "none" : "1px solid #d4e3db"
                     }}
                   >
-                    <small>{msg.from}</small>
-                    <div>{msg.text}</div>
+                    <small style={{
+                      ...styles.messageSender,
+                      color: msg.from === number ? "#a8d5ba" : "#6b8f7a"
+                    }}>
+                      {msg.from}
+                    </small>
+                    <div style={{
+                      ...styles.messageText,
+                      color: msg.from === number ? "#fff" : "#1a3a2e"
+                    }}>
+                      {msg.text}
+                    </div>
                   </div>
                 ))
               )}
-
               <div ref={endRef} />
             </div>
 
+            {/* INPUT */}
             <div style={styles.inputRow}>
               <input
-                style={styles.input}
+                style={styles.messageInput}
                 value={text}
-                placeholder="Digite..."
+                placeholder="Digite sua mensagem..."
                 onChange={(e) => setText(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && sendMessage()}
               />
-              <button onClick={sendMessage} style={styles. button}>
-                Enviar
+              <button 
+                onClick={sendMessage} 
+                style={{
+                  ...styles.sendBtn,
+                  opacity: text.trim() ? 1 : 0.5,
+                  cursor: text.trim() ? "pointer" : "not-allowed"
+                }}
+                disabled={!text.trim()}
+              >
+                ▶
               </button>
             </div>
           </>
@@ -287,74 +349,364 @@ export default function App() {
 }
 
 // ======================================================
+// STYLES
+// ======================================================
 
 const styles = {
-  center: {
-    textAlign: "center",
-    marginTop: "150px",
+  // ===== LOGIN =====
+  loginContainer: {
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    height: "100vh",
+    backgroundColor: "#1a3a2e",
+    fontFamily: "Arial, sans-serif"
   },
+
+  loginCard: {
+    width: "400px",
+    backgroundColor: "#fff",
+    borderRadius: "20px",
+    padding: "40px",
+    boxShadow: "0 4px 20px rgba(0,0,0,0.3)"
+  },
+
+  loginHeader: {
+    textAlign: "center",
+    marginBottom: "30px"
+  },
+
+  loginTitle: {
+    fontSize: "42px",
+    fontWeight: "bold",
+    color: "#1a3a2e",
+    margin: "0 0 10px 0"
+  },
+
+  loginSubtitle: {
+    fontSize: "14px",
+    color: "#4a7c59",
+    letterSpacing: "1px",
+    margin: 0
+  },
+
+  loginInput: {
+    width: "100%",
+    padding: "15px",
+    fontSize: "16px",
+    border: "2px solid #d4e3db",
+    borderRadius: "12px",
+    backgroundColor: "#f0f5f3",
+    color: "#1a3a2e",
+    outline: "none",
+    marginBottom: "20px",
+    boxSizing: "border-box"
+  },
+
+  loginBtn: {
+    width: "100%",
+    padding: "16px",
+    fontSize: "16px",
+    fontWeight: "bold",
+    letterSpacing: "1.5px",
+    backgroundColor: "#2d5f43",
+    color: "#fff",
+    border: "none",
+    borderRadius: "12px",
+    cursor: "pointer",
+    boxShadow: "0 4px 10px rgba(45, 95, 67, 0.3)",
+    transition: "all 0.3s"
+  },
+
+  statusContainer: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: "20px",
+    gap: "8px"
+  },
+
+  statusDot: {
+    width: "10px",
+    height: "10px",
+    borderRadius: "50%"
+  },
+
+  statusText: {
+    fontSize: "13px",
+    color: "#666"
+  },
+
+  // ===== MAIN CONTAINER =====
   container: {
     display: "flex",
     height: "100vh",
-    fontFamily: "Arial",
+    fontFamily: "Arial, sans-serif",
+    backgroundColor: "#f0f5f3"
   },
+
+  // ===== SIDEBAR =====
   sidebar: {
-    width: "250px",
-    background: "#eee",
-    padding: 10,
-    overflowY: "auto",
+    width: "280px",
+    backgroundColor: "#1a3a2e",
+    display: "flex",
+    flexDirection: "column",
+    overflowY: "auto"
   },
-  header: {
-    marginBottom: 10,
+
+  sidebarHeader: {
+    padding: "20px",
+    borderBottom: "1px solid #2d5f43"
   },
-  chatItem: {
-    padding: 10,
-    borderRadius: 6,
+
+  sidebarTitle: {
+    fontSize: "20px",
+    fontWeight: "bold",
+    color: "#fff",
+    margin: "0 0 10px 0"
+  },
+
+  userBadge: {
+    backgroundColor: "#2d5f43",
+    padding: "6px 12px",
+    borderRadius: "12px",
+    display: "inline-block"
+  },
+
+  userBadgeText: {
+    color: "#a8d5ba",
+    fontSize: "12px",
+    fontWeight: "600"
+  },
+
+  section: {
+    padding: "15px"
+  },
+
+  sectionTitle: {
+    fontSize: "13px",
+    fontWeight: "bold",
+    color: "#a8d5ba",
+    marginBottom: "12px",
+    letterSpacing: "0.5px"
+  },
+
+  emptyText: {
+    fontSize: "12px",
+    color: "#6b8f7a",
+    fontStyle: "italic",
+    textAlign: "center",
+    margin: "10px 0"
+  },
+
+  conversationItem: {
+    display: "flex",
+    alignItems: "center",
+    padding: "14px",
+    borderRadius: "10px",
+    marginBottom: "10px",
     cursor: "pointer",
-    marginBottom: 6,
+    transition: "all 0.2s"
   },
+
+  conversationAvatar: {
+    width: "40px",
+    height: "40px",
+    borderRadius: "50%",
+    backgroundColor: "#a8d5ba",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    fontSize: "18px",
+    fontWeight: "bold",
+    color: "#1a3a2e",
+    marginRight: "12px"
+  },
+
+  conversationName: {
+    color: "#fff",
+    fontSize: "14px",
+    fontWeight: "500"
+  },
+
+  divider: {
+    height: "1px",
+    backgroundColor: "#2d5f43",
+    margin: "10px 15px"
+  },
+
   agentBtn: {
     width: "100%",
-    padding: 8,
-    margin: "4px 0",
-    cursor: "pointer",
-    background: "#667eea",
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+    padding: "12px",
+    backgroundColor: "#2d5f43",
     color: "#fff",
     border: "none",
-    borderRadius: 6,
+    borderRadius: "8px",
+    cursor: "pointer",
+    fontSize: "14px",
+    fontWeight: "500",
+    marginBottom: "8px",
+    transition: "all 0.2s"
   },
-  chat: {
+
+  agentDot: {
+    width: "8px",
+    height: "8px",
+    borderRadius: "50%",
+    backgroundColor: "#27ae60"
+  },
+
+  // ===== CHAT AREA =====
+  chatArea: {
     flex: 1,
     display: "flex",
     flexDirection: "column",
-    padding: 10,
+    backgroundColor: "#f0f5f3"
   },
+
+  emptyChatContainer: {
+    flex: 1,
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: "40px"
+  },
+
+  emptyChatIcon: {
+    fontSize: "64px",
+    marginBottom: "20px",
+    opacity: 0.3
+  },
+
+  emptyChatTitle: {
+    fontSize: "20px",
+    fontWeight: "600",
+    color: "#1a3a2e",
+    margin: "0 0 10px 0"
+  },
+
+  emptyChatSubtitle: {
+    fontSize: "14px",
+    color: "#6b8f7a",
+    textAlign: "center",
+    margin: 0
+  },
+
+  chatHeader: {
+    display: "flex",
+    alignItems: "center",
+    padding: "20px",
+    backgroundColor: "#fff",
+    borderBottom: "1px solid #d4e3db"
+  },
+
+  chatHeaderAvatar: {
+    width: "50px",
+    height: "50px",
+    borderRadius: "50%",
+    backgroundColor: "#2d5f43",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    fontSize: "22px",
+    fontWeight: "bold",
+    color: "#fff",
+    marginRight: "15px"
+  },
+
+  chatHeaderName: {
+    fontSize: "18px",
+    fontWeight: "bold",
+    color: "#1a3a2e",
+    margin: "0 0 4px 0"
+  },
+
+  chatHeaderStatus: {
+    fontSize: "13px",
+    color: "#27ae60"
+  },
+
   messages: {
     flex: 1,
     display: "flex",
     flexDirection: "column",
+    padding: "20px",
     overflowY: "auto",
-    background: "#f0f0f0",
-    borderRadius: 8,
-    padding: 10,
+    backgroundColor: "#f0f5f3"
   },
+
+  emptyMessagesContainer: {
+    textAlign: "center",
+    marginTop: "50px"
+  },
+
+  emptyMessagesText: {
+    fontSize: "15px",
+    color: "#6b8f7a",
+    margin: "0 0 5px 0"
+  },
+
+  emptyMessagesSubtext: {
+    fontSize: "13px",
+    color: "#88a399",
+    margin: 0
+  },
+
+  messageBubble: {
+    maxWidth: "70%",
+    padding: "12px 16px",
+    borderRadius: "16px",
+    marginBottom: "12px"
+  },
+
+  messageSender: {
+    fontSize: "11px",
+    fontWeight: "600",
+    display: "block",
+    marginBottom: "5px",
+    opacity: 0.7
+  },
+
+  messageText: {
+    fontSize: "15px",
+    lineHeight: "1.4"
+  },
+
   inputRow: {
     display: "flex",
-    marginTop: 10,
-    gap: 10,
+    gap: "12px",
+    padding: "15px",
+    backgroundColor: "#fff",
+    borderTop: "1px solid #d4e3db"
   },
-  input: {
+
+  messageInput: {
     flex: 1,
-    padding: 10,
-    borderRadius: 20,
-    border: "1px solid #ccc",
+    padding: "12px 18px",
+    fontSize: "15px",
+    border: "1px solid #d4e3db",
+    borderRadius: "20px",
+    backgroundColor: "#f0f5f3",
+    color: "#1a3a2e",
+    outline: "none"
   },
-  button: {
-    padding: "10px 20px",
-    background: "#667eea",
+
+  sendBtn: {
+    width: "50px",
+    height: "50px",
+    borderRadius: "50%",
+    backgroundColor: "#2d5f43",
     color: "#fff",
     border: "none",
-    borderRadius: 20,
-    cursor: "pointer",
-  },
+    fontSize: "20px",
+    fontWeight: "bold",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    transition: "all 0.2s"
+  }
 };
